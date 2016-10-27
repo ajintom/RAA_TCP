@@ -60,18 +60,20 @@
 #include "ns3/queue-disc.h"
 #include "ns3/object-map.h"
 #include "ns3/object.h" 
+#include "ns3/wifi-mac-queue.h"
+#include "ns3/dca-txop.h" 
+#include "ns3/wifi-mac-header.h"            
 #include <vector>
 #include <stdint.h>
 #include <sstream>
 #include <fstream>
 
-NS_LOG_COMPONENT_DEFINE ("wifi-major-traffic-control");
+NS_LOG_COMPONENT_DEFINE ("wifi-major-dcatxop");
+//LogComponentEnableAll(wifi-major-dcatxop); 
 
 using namespace ns3;
 
-Ptr<PacketSink> sink;                         /* Pointer to the packet sink application */   
-Ptr<NetDevice> ptrNetDevice;
-Ptr<QueueDisc> queueNetDevice;             
+Ptr<PacketSink> sink;                         /* Pointer to the packet sink application */           
 uint64_t lastTotalRx = 0;                     /* The value of the last total received bytes */
 
 void
@@ -104,7 +106,7 @@ using namespace ns3;
 int main (int argc, char *argv[])
 {
   uint32_t nWifis = 1;
-  uint32_t nStas = 5;
+  uint32_t nStas = 15 ;
   bool sendIp = true;
   bool writeMobility = false;
   uint32_t payloadSize = 1472;                       /* Transport layer payload size in bytes. */
@@ -114,6 +116,8 @@ int main (int argc, char *argv[])
   std::string RateManager;
   double simulationTime = 3;                        /* Simulation time in seconds. */
   bool pcapTracing = false;                          /* PCAP Tracing is enabled or not. */
+
+ //LogComponentEnable("DcaTxop", LOG_LEVEL_ALL);
 
   CommandLine cmd;
   //cmd.AddValue ("RateManager", "RateManager", RateManager);
@@ -151,22 +155,29 @@ int main (int argc, char *argv[])
   wifiPhy.Set ("TxPowerStart", DoubleValue (10.0));
   wifiPhy.Set ("TxPowerEnd", DoubleValue (10.0));
   wifiPhy.Set ("TxPowerLevels", UintegerValue (1));
-  wifiPhy.Set ("TxGain", DoubleValue (1));                      // change? 
-  wifiPhy.Set ("RxGain", DoubleValue (1));                      // change?
+  wifiPhy.Set ("TxGain", DoubleValue (0));                      // change? 
+  wifiPhy.Set ("RxGain", DoubleValue (0));                      // change?
   wifiPhy.Set ("RxNoiseFigure", DoubleValue (10));              // change?
   wifiPhy.Set ("CcaMode1Threshold", DoubleValue (-79));
   wifiPhy.Set ("EnergyDetectionThreshold", DoubleValue (-79 + 3));
   wifiPhy.SetErrorRateModel ("ns3::YansErrorRateModel");
-  wifiHelper.SetRemoteStationManager ("ns3::AarfWifiManager");
-  //wifiPhy.SetQueue ("ns3::DropTailQueue", "Mode", StringValue ("QUEUE_MODE_PACKETS"), "MaxPackets", UintegerValue (1));
-
-  // logging helper 
-  //ns3::WifiHelper::EnableLogComponents();	
-
+  //wifiHelper.SetRemoteStationManager ("ns3::AparfWifiManager");
+  //wifiHelper.SetRemoteStationManager ("ns3::AmrrWifiManager");
+  //wifiHelper.SetRemoteStationManager ("ns3::AarfWifiManager");
+  //wifiHelper.SetRemoteStationManager ("ns3::AarfcdWifiManager");
+  //wifiHelper.SetRemoteStationManager ("ns3::CaraWifiManager");
+  //wifiHelper.SetRemoteStationManager ("ns3::IdealWifiManager");
+  wifiHelper.SetRemoteStationManager ("ns3::OnoeWifiManager");
+  //wifiHelper.SetRemoteStationManager ("ns3::MinstrelHtWifiManager");
+  //wifiHelper.SetRemoteStationManager ("ns3::ConstantRateWifiManager");
+  
+  
+  
+  
 
   NodeContainer backboneNodes;
   NetDeviceContainer backboneDevices;
-  
+
   InternetStackHelper stack;
   CsmaHelper csma;
   Ipv4AddressHelper ip;
@@ -193,6 +204,7 @@ int main (int argc, char *argv[])
       BridgeHelper bridge;
       
       sta.Create (nStas);
+      
       mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
                                      "MinX", DoubleValue (wifiX),
                                      "MinY", DoubleValue (0.0),
@@ -201,7 +213,9 @@ int main (int argc, char *argv[])
                                      "GridWidth", UintegerValue (1),
                                      "LayoutType", StringValue ("RowFirst"));
 
-
+                         
+                                             
+              
       // setup the AP.
       mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
       mobility.Install (backboneNodes.Get (0));
@@ -217,33 +231,37 @@ int main (int argc, char *argv[])
 
       // setup the STAs
       stack.Install (sta);
-      mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
-                                 "Mode", StringValue ("Time"),
-                                 "Time", StringValue ("2s"),
-                                 "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"),
-                                 "Bounds", RectangleValue (Rectangle (wifiX, wifiX+5.0,0.0, (nStas+1)*5.0)));
+                                
+      mobility.SetPositionAllocator ("ns3::RandomDiscPositionAllocator", // allocates random position within a disc
+                                     "X", DoubleValue (0.0), 
+                                     "Y", DoubleValue (0.0),
+                                     "Rho", StringValue ("ns3::UniformRandomVariable[Min=0|Max=10]")); //decide radius here
+      mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel"); //nodes wont move
+                                 
       mobility.Install (sta);
       wifiMac.SetType ("ns3::StaWifiMac",
                        "Ssid", SsidValue (ssid));                // why does station need SSID ?
       staDev = wifiHelper.Install (wifiPhy, wifiMac, sta); 
 
+    Ptr<DcaTxop> dca[nStas];
 
-      //traffic control
-      TrafficControlHelper tch;
-      uint16_t handle = tch.SetRootQueueDisc ("ns3::RedQueueDisc");
-      // Add the internal queue used by Red
-      tch.AddInternalQueues (handle, 1, "ns3::DropTailQueue", "MaxPackets", UintegerValue (10000));
-      QueueDiscContainer qdiscs = tch.Install (staDev); 
-       
-      //queueNetDevice = GetRootQueueDiscOnDevice (ptrNetDevice);
-      Ptr<QueueDisc> q = qdiscs.Get (1);
-      queueNetDevice->TraceConnectWithoutContext ("PacketsInQueue", MakeCallback (&TcPacketsInQueueTrace));  
-
-      Ptr<NetDevice> nd = staDev.Get (1);
-      Ptr<PointToPointNetDevice> ptpnd = DynamicCast<PointToPointNetDevice> (nd);
-      Ptr<Queue> queue = ptpnd->GetQueue ();
-      queue->TraceConnectWithoutContext ("PacketsInQueue", MakeCallback (&DevicePacketsInQueueTrace));
-                 
+    for (uint32_t i = 0; i < nStas; ++i)
+     {
+       Ptr<WifiNetDevice> dev = DynamicCast<WifiNetDevice> (staDev.Get(i));
+       NS_ASSERT (dev != NULL);
+       PointerValue ptr;
+       dev->GetAttribute ("Mac",ptr);
+       Ptr<StaWifiMac> mac = ptr.Get<StaWifiMac> ();
+       NS_ASSERT (mac != NULL);
+       mac->GetAttribute ("DcaTxop",ptr);
+       dca[i] = ptr.Get<DcaTxop> ();
+       NS_ASSERT (dca[i] != NULL);
+     }  
+      
+    
+    
+    
+                      
       staInterface = ip.Assign (staDev);   
                  
       wifiX += 20.0;
@@ -261,16 +279,18 @@ int main (int argc, char *argv[])
   server.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1]"));
   server.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
   server.SetAttribute ("DataRate", DataRateValue (DataRate (dataRate)));
-  ApplicationContainer serverApp = server.Install (sta.Get(0));                   // who do you set as the server? 
+
+  for (uint32_t i = 0; i < nStas ; ++i)
+  {
+    ApplicationContainer serverApp = server.Install (sta.Get(i));
+    serverApp.Start (Seconds (1.0)); 
+  }
+   
 
   sinkApp.Start (Seconds (0.0));
-  serverApp.Start (Seconds (1.0));
   Simulator::Schedule (Seconds (1.1), &CalculateThroughput);
 
-  // wifiremotestationmanger
-  // traceDevice->TraceConnectWithoutContext ("MacTxDataFailed", MakeBoundCallback (&TrackDataFailed()));
-
-    
+      
   if (pcapTracing)
     {  
       wifiPhy.SetPcapDataLinkType (YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
@@ -301,13 +321,10 @@ int main (int argc, char *argv[])
   std::cout << "  Offered Load: " << stats[1].txBytes * 8.0 / (stats[1].timeLastTxPacket.GetSeconds () - stats[1].timeFirstTxPacket.GetSeconds ()) / 1000000 << " Mbps" << std::endl;
   std::cout << "  Rx Packets:   " << stats[1].rxPackets << std::endl;
   std::cout << "  Rx Bytes:   " << stats[1].rxBytes << std::endl;
-  std::cout << "  Packets Dropped by Queue Disc:   " << stats[1].packetsDropped[Ipv4FlowProbe::DROP_QUEUE_DISC] << std::endl;
-  std::cout << "  Bytes Dropped by Queue Disc:   " << stats[1].bytesDropped[Ipv4FlowProbe::DROP_QUEUE_DISC] << std::endl;
-  std::cout << "  Packets Dropped by NetDevice:   " << stats[1].packetsDropped[Ipv4FlowProbe::DROP_QUEUE] << std::endl;
-  std::cout << "  Bytes Dropped by NetDevice:   " << stats[1].bytesDropped[Ipv4FlowProbe::DROP_QUEUE] << std::endl;
   std::cout << "  Throughput: " << stats[1].rxBytes * 8.0 / (stats[1].timeLastRxPacket.GetSeconds () - stats[1].timeFirstRxPacket.GetSeconds ()) / 1000000 << " Mbps" << std::endl;
   std::cout << "  Mean delay:   " << stats[1].delaySum.GetSeconds () / stats[1].rxPackets << std::endl;
   std::cout << "  Mean jitter:   " << stats[1].jitterSum.GetSeconds () / (stats[1].rxPackets - 1) << std::endl;
+
 
   Simulator::Destroy ();
 
@@ -317,12 +334,15 @@ int main (int argc, char *argv[])
   thr = totalPacketsThr * 8 / (simulationTime * 1000000.0); //Mbit/s
   std::cout << "  Rx Bytes: " << totalPacketsThr << std::endl;
   std::cout << "  Average Goodput: " << thr << " Mbit/s" << std::endl;
+
+  uint32_t coll = 0;
+  for (uint32_t i = 0; i < nStas; ++i)
+  {
+     coll = coll + dca[i]->m_collision;
+  }
+  std::cout << "Collissions:   " << coll << std::endl;
   std::cout << std::endl << "*** TC Layer statistics ***" << std::endl;
-  std::cout << "  Packets dropped by the TC layer: " << q->GetTotalDroppedPackets () << std::endl;
-  std::cout << "  Bytes dropped by the TC layer: " << q->GetTotalDroppedBytes () << std::endl;
-  std::cout << "  Packets dropped by the netdevice: " << queue->GetTotalDroppedPackets () << std::endl;
-  std::cout << "  Packets requeued by the TC layer: " << q->GetTotalRequeuedPackets () << std::endl;
-  
+    
   double averageThroughput = ((sink->GetTotalRx() * 8) / (1e6  * simulationTime));
   if (averageThroughput < 5.0)
     {
