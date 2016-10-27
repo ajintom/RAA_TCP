@@ -64,6 +64,7 @@ NS_LOG_COMPONENT_DEFINE ("wifi-major");
 
 using namespace ns3;
 
+Ptr<WifiRemoteStationManager> WRSM_object; //not used yet
 Ptr<PacketSink> sink;                         /* Pointer to the packet sink application */
 uint64_t lastTotalRx = 0;                     /* The value of the last total received bytes */
 
@@ -76,6 +77,16 @@ CalculateThroughput ()
   std::cout << now.GetSeconds () << "s: \t" << cur << " Mbit/s" << std::endl;
   lastTotalRx = sink->GetTotalRx ();
   Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
+}
+
+void getMacTxDataFailed(Mac48Address val)
+{
+  std::cout<<"PRINTING MAC TX DATA FAILED ========= ";
+  uint8_t buffer[6];
+  val.CopyTo (buffer); //we can use this to std cout any Mac48address type
+  
+  for(uint32_t i = 0;i<6;i++)
+  	std::cout<<buffer[i]<<'\n';
 }
 
 using namespace ns3;
@@ -114,6 +125,9 @@ int main (int argc, char *argv[])
 
 /* Configure TCP Options */
   Config::SetDefault ("ns3::TcpSocket::SegmentSize", UintegerValue (payloadSize));
+
+  Config::ConnectWithoutContext ("/NodeList/0/DeviceList/0/$ns3::WifiNetDevice/RemoteStationManager/MacTxDataFailed",
+   MakeCallback (&getMacTxDataFailed));  //pointless as of now. For testing this, we need to use an error model and invoke data failures at Tx
  
   WifiMacHelper wifiMac;
   WifiHelper wifiHelper;
@@ -205,11 +219,20 @@ int main (int argc, char *argv[])
 
       // setup the STAs
       stack.Install (sta);
-      mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
+      /*mobility.SetMobilityModel ("ns3::RandomWalk2dMobilityModel",
                                  "Mode", StringValue ("Time"),
                                  "Time", StringValue ("2s"),
                                  "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"),
-                                 "Bounds", RectangleValue (Rectangle (wifiX, wifiX+5.0,0.0, (nStas+1)*5.0)));
+                                 "Bounds", RectangleValue (Rectangle (wifiX, wifiX+5.0,0.0, (nStas+1)*5.0)));*/
+
+      //new mobility model o
+      mobility.SetPositionAllocator ("ns3::RandomDiscPositionAllocator", // allocates random position within a disc
+                                     "X", DoubleValue (0.0), 
+                                     "Y", DoubleValue (0.0),
+                                     "Rho", StringValue ("ns3::UniformRandomVariable[Min=0|Max=10]")); //decide radius here
+      mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel"); //nodes wont move
+
+
       mobility.Install (sta);
       wifiMac.SetType ("ns3::StaWifiMac",
                        "Ssid", SsidValue (ssid));                // why does station need SSID ?
