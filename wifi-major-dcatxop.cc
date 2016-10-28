@@ -166,8 +166,8 @@ int main (int argc, char *argv[])
   //wifiHelper.SetRemoteStationManager ("ns3::AarfWifiManager");
   //wifiHelper.SetRemoteStationManager ("ns3::AarfcdWifiManager");
   //wifiHelper.SetRemoteStationManager ("ns3::CaraWifiManager");
-  //wifiHelper.SetRemoteStationManager ("ns3::IdealWifiManager");
-  wifiHelper.SetRemoteStationManager ("ns3::OnoeWifiManager");
+  wifiHelper.SetRemoteStationManager ("ns3::IdealWifiManager");
+  //wifiHelper.SetRemoteStationManager ("ns3::OnoeWifiManager");
   //wifiHelper.SetRemoteStationManager ("ns3::MinstrelHtWifiManager");
   //wifiHelper.SetRemoteStationManager ("ns3::ConstantRateWifiManager");
   
