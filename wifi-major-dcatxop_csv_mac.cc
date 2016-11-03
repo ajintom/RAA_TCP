@@ -74,7 +74,7 @@ NS_LOG_COMPONENT_DEFINE ("wifi-major-dcatxop");
 //LogComponentEnableAll(wifi-major-dcatxop); 
 
 using namespace ns3;
-
+uint32_t mac_drop = 0;
 Ptr<PacketSink> sink;                         /* Pointer to the packet sink application */           
 uint64_t lastTotalRx = 0;                     /* The value of the last total received bytes */
 
@@ -89,6 +89,12 @@ CalculateThroughput ()
   Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
 } 
 
+void 
+MacDrop (Ptr<const Packet> p)
+{
+   mac_drop+=1;
+}
+
 using namespace ns3;
 
 int main (int argc, char *argv[])
@@ -101,14 +107,14 @@ int main (int argc, char *argv[])
   std::string dataRate = "100Mbps";                  /* Application layer datarate. */
   std::string tcpVariant = "ns3::TcpCubic";        /* TCP variant type. */
   std::string phyRate = "HtMcs7";                    /* Physical layer bitrate. */
-  std::string RateManager;
+  std::string RateManager = "AarfWifiManager";
   double simulationTime = 3;                        /* Simulation time in seconds. */
   bool pcapTracing = false;                          /* PCAP Tracing is enabled or not. */
   
  //LogComponentEnable("DcaTxop", LOG_LEVEL_ALL);
 
   CommandLine cmd;
-  //cmd.AddValue ("RateManager", "RateManager", RateManager);
+  cmd.AddValue ("RateManager", "RateManager", RateManager);
   cmd.AddValue ("nWifis", "Number of wifi networks", nWifis);
   cmd.AddValue ("nStas", "Number of stations per wifi network", nStas);
   cmd.AddValue ("SendIp", "Send Ipv4 or raw packets", sendIp);
@@ -121,6 +127,8 @@ int main (int argc, char *argv[])
   cmd.AddValue ("pcap", "Enable/disable PCAP Tracing", pcapTracing);
   cmd.Parse (argc, argv);
 
+  std::string RateAdaptationManager = "ns3::"; 
+  RateAdaptationManager += RateManager;
 /* No fragmentation and no RTS/CTS */
   Config::SetDefault ("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue ("999999"));
   Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("999999"));
@@ -154,7 +162,8 @@ int main (int argc, char *argv[])
   //wifiHelper.SetRemoteStationManager ("ns3::AarfWifiManager");
   //wifiHelper.SetRemoteStationManager ("ns3::AarfcdWifiManager");
   //wifiHelper.SetRemoteStationManager ("ns3::CaraWifiManager");
-  wifiHelper.SetRemoteStationManager ("ns3::IdealWifiManager");
+  //wifiHelper.SetRemoteStationManager ("ns3::IdealWifiManager");
+  wifiHelper.SetRemoteStationManager (RateAdaptationManager);
   //wifiHelper.SetRemoteStationManager ("ns3::OnoeWifiManager");
   //wifiHelper.SetRemoteStationManager ("ns3::MinstrelHtWifiManager");
   //wifiHelper.SetRemoteStationManager ("ns3::ConstantRateWifiManager");
@@ -291,6 +300,8 @@ int main (int argc, char *argv[])
       MobilityHelper::EnableAsciiAll (ascii.CreateFileStream ("wifi-major.mob"));
     }
 
+  Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRxDrop", MakeCallback(&MacDrop));
+
   //flowmonitor 
   FlowMonitorHelper flowmon;
   Ptr<FlowMonitor> monitor = flowmon.InstallAll();
@@ -337,19 +348,20 @@ int main (int argc, char *argv[])
   double thr = 0;
   uint32_t totalPacketsThr = DynamicCast<PacketSink> (sinkApp.Get (0))->GetTotalRx ();
   thr = totalPacketsThr * 8 / (simulationTime * 1000000.0); //Mbit/s
-  //std::cout << "  Rx Bytes: " << totalPacketsThr << std::endl;
   std::cout << "  Average Goodput: " << thr << " Mbit/s" << std::endl;
 
-  uint32_t coll = 0;
-  for (uint32_t i = 0; i < nStas; ++i)
+  uint32_t coll = 0;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+  for (uint32_t i = 0; i < nStas; ++i)                                                                                                                                                                                                                                        
   {
-     coll = coll + dca[i]->m_collision;
+    coll = coll + dca[i]->m_collision;
   }
   std::cout << "Collissions:   " << coll << std::endl;
   std::cout << std::endl << "*** TC Layer statistics ***" << std::endl;
 
+  std::cout << "Mac drop:" << mac_drop << std::endl;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+
   std::ofstream myfile;
-  myfile.open ("values_file.csv",std::ios_base::app);
+  myfile.open ("values_"+RateManager+".csv",std::ios_base::app);
   myfile << std::endl;
   myfile << Avg_tp << ",";
   myfile << Avg_delay << ",";
