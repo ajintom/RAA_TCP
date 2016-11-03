@@ -66,6 +66,7 @@
 #include "ns3/log.h"   
 #include <vector>
 #include <stdint.h>
+#include <iostream>
 #include <sstream>
 #include <fstream>
 
@@ -76,19 +77,6 @@ using namespace ns3;
 
 Ptr<PacketSink> sink;                         /* Pointer to the packet sink application */           
 uint64_t lastTotalRx = 0;                     /* The value of the last total received bytes */
-
-void
-TcPacketsInQueueTrace (uint32_t oldValue, uint32_t newValue)
-{
-  std::cout << "TcPacketsInQueue " << oldValue << " to " << newValue << std::endl;
-}
-
-void
-DevicePacketsInQueueTrace (uint32_t oldValue, uint32_t newValue)
-{
-  std::cout << "DevicePacketsInQueue " << oldValue << " to " << newValue << std::endl;
-}
-
 
 // calculate throughput 
 void
@@ -101,24 +89,12 @@ CalculateThroughput ()
   Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
 }
 
-/*
-void
-TrackRate (std::map<FlowId, FlowMonitor::FlowStats> &stats)
-{
-   Time now = Simulator::Now ();
-   std::cout << now.GetSeconds () << "s:" << std::endl;
-   std::cout << "  Throughput: " << stats[1].rxBytes * 8.0 / (stats[1].timeLastRxPacket.GetSeconds () - stats[1].timeFirstRxPacket.GetSeconds ()) / 1000000 << " Mbps" << std::endl;
-   std::cout << "  Mean delay:   " << stats[1].delaySum.GetSeconds () / stats[1].rxPackets << std::endl;  
-   Simulator::Schedule (MilliSeconds (100), &TrackRate(stats));
-}
-*/
-
 using namespace ns3;
 
 int main (int argc, char *argv[])
 {
   uint32_t nWifis = 1;
-  uint32_t nStas = 10 ;
+  uint32_t nStas = 10;
   bool sendIp = true;
   bool writeMobility = false;
   uint32_t payloadSize = 1472;                       /* Transport layer payload size in bytes. */
@@ -128,7 +104,7 @@ int main (int argc, char *argv[])
   std::string RateManager;
   double simulationTime = 3;                        /* Simulation time in seconds. */
   bool pcapTracing = false;                          /* PCAP Tracing is enabled or not. */
-
+  
  //LogComponentEnable("DcaTxop", LOG_LEVEL_ALL);
 
   CommandLine cmd;
@@ -330,8 +306,7 @@ int main (int argc, char *argv[])
   double Avg_delay;
   double tp[nStas];
   double mean_delay[nStas];
-  //double pkt_drop[nStas];
-
+  
     for (uint32_t i = 1; i <= nStas; ++i)
   { 
     
@@ -339,24 +314,17 @@ int main (int argc, char *argv[])
     mean_delay[i] = stats[i].delaySum.GetSeconds () / stats[i].rxPackets; 
   }  
  
-  /*
-  std::cout << "packets dropped:" << stats[1].packetsDropped << std::endl;
-  //NS_LOG_DEBUG ("++stats.packetsDropped[" << reasonCode<< "]; // becomes: " << stats.packetsDropped[reasonCode]);
-  for (uint32_t reasonCode = 0; reasonCode < i->second.packetsDropped.size (); reasonCode++)
-  {
-    flowc << "packetsDropped reasonCode" << reasonCode << i->second.packetsDropped[reasonCode]<< std::endl;
-  }
-  */
-
-  for (uint32_t i = 1; i <= nStas; ++i)
+    for (uint32_t i = 1; i <= nStas; ++i)
   {
     std::cout << tp[i] << std::endl; 
     Avg_tp += tp[i];
     Avg_delay += mean_delay[i];
   }
-
-  std::cout << "  Throughput: " << Avg_tp/nStas << " Mbps" << std::endl;
-  std::cout << "  Mean delay:   " << Avg_delay/nStas << "s" << std::endl;
+  
+  Avg_tp =  Avg_tp/nStas;
+  Avg_delay = Avg_delay/nStas;
+  std::cout << "  Throughput: " << Avg_tp << " Mbps" << std::endl;
+  std::cout << "  Mean delay:   " << Avg_delay << "s" << std::endl;
 
   Simulator::Destroy ();
   std::cout << std::endl << "*** Application statistics ***" << std::endl;
@@ -373,6 +341,16 @@ int main (int argc, char *argv[])
   }
   std::cout << "Collissions:   " << coll << std::endl;
   std::cout << std::endl << "*** TC Layer statistics ***" << std::endl;
+
+  std::ofstream myfile;
+  myfile.open ("values_file.csv",std::ios_base::app);
+  myfile << std::endl;
+  myfile << Avg_tp << ",";
+  myfile << Avg_delay << ",";
+  myfile << thr << ",";
+  myfile << coll << ",";
+  myfile.close();
+
     
   double averageThroughput = ((sink->GetTotalRx() * 8) / (1e6  * simulationTime));
   if (averageThroughput < 5.0)
