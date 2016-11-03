@@ -62,7 +62,8 @@
 #include "ns3/object.h" 
 #include "ns3/wifi-mac-queue.h"
 #include "ns3/dca-txop.h" 
-#include "ns3/wifi-mac-header.h"            
+#include "ns3/wifi-mac-header.h"   
+#include "ns3/log.h"   
 #include <vector>
 #include <stdint.h>
 #include <sstream>
@@ -100,13 +101,24 @@ CalculateThroughput ()
   Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
 }
 
+/*
+void
+TrackRate (std::map<FlowId, FlowMonitor::FlowStats> &stats)
+{
+   Time now = Simulator::Now ();
+   std::cout << now.GetSeconds () << "s:" << std::endl;
+   std::cout << "  Throughput: " << stats[1].rxBytes * 8.0 / (stats[1].timeLastRxPacket.GetSeconds () - stats[1].timeFirstRxPacket.GetSeconds ()) / 1000000 << " Mbps" << std::endl;
+   std::cout << "  Mean delay:   " << stats[1].delaySum.GetSeconds () / stats[1].rxPackets << std::endl;  
+   Simulator::Schedule (MilliSeconds (100), &TrackRate(stats));
+}
+*/
 
 using namespace ns3;
 
 int main (int argc, char *argv[])
 {
   uint32_t nWifis = 1;
-  uint32_t nStas = 15 ;
+  uint32_t nStas = 10 ;
   bool sendIp = true;
   bool writeMobility = false;
   uint32_t payloadSize = 1472;                       /* Transport layer payload size in bytes. */
@@ -258,10 +270,7 @@ int main (int argc, char *argv[])
        NS_ASSERT (dca[i] != NULL);
      }  
       
-    
-    
-    
-                      
+                            
       staInterface = ip.Assign (staDev);   
                  
       wifiX += 20.0;
@@ -289,8 +298,9 @@ int main (int argc, char *argv[])
 
   sinkApp.Start (Seconds (0.0));
   Simulator::Schedule (Seconds (1.1), &CalculateThroughput);
+  //Simulator::Schedule (Seconds (1.1), &TrackRate(stats));
 
-      
+    
   if (pcapTracing)
     {  
       wifiPhy.SetPcapDataLinkType (YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
@@ -315,24 +325,45 @@ int main (int argc, char *argv[])
 
   Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
   std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats ();
-  std::cout << std::endl << "*** Flow monitor statistics ***" << std::endl;
-  std::cout << "  Tx Packets:   " << stats[1].txPackets << std::endl;
-  std::cout << "  Tx Bytes:   " << stats[1].txBytes << std::endl;
-  std::cout << "  Offered Load: " << stats[1].txBytes * 8.0 / (stats[1].timeLastTxPacket.GetSeconds () - stats[1].timeFirstTxPacket.GetSeconds ()) / 1000000 << " Mbps" << std::endl;
-  std::cout << "  Rx Packets:   " << stats[1].rxPackets << std::endl;
-  std::cout << "  Rx Bytes:   " << stats[1].rxBytes << std::endl;
-  std::cout << "  Throughput: " << stats[1].rxBytes * 8.0 / (stats[1].timeLastRxPacket.GetSeconds () - stats[1].timeFirstRxPacket.GetSeconds ()) / 1000000 << " Mbps" << std::endl;
-  std::cout << "  Mean delay:   " << stats[1].delaySum.GetSeconds () / stats[1].rxPackets << std::endl;
-  std::cout << "  Mean jitter:   " << stats[1].jitterSum.GetSeconds () / (stats[1].rxPackets - 1) << std::endl;
+  
+  double Avg_tp;
+  double Avg_delay;
+  double tp[nStas];
+  double mean_delay[nStas];
+  //double pkt_drop[nStas];
 
+    for (uint32_t i = 1; i <= nStas; ++i)
+  { 
+    
+    tp[i] = (stats[i].rxBytes * 8.0) / (stats[i].timeLastRxPacket.GetSeconds () - stats[i].timeFirstRxPacket.GetSeconds ()) / 1000000; 
+    mean_delay[i] = stats[i].delaySum.GetSeconds () / stats[i].rxPackets; 
+  }  
+ 
+  /*
+  std::cout << "packets dropped:" << stats[1].packetsDropped << std::endl;
+  //NS_LOG_DEBUG ("++stats.packetsDropped[" << reasonCode<< "]; // becomes: " << stats.packetsDropped[reasonCode]);
+  for (uint32_t reasonCode = 0; reasonCode < i->second.packetsDropped.size (); reasonCode++)
+  {
+    flowc << "packetsDropped reasonCode" << reasonCode << i->second.packetsDropped[reasonCode]<< std::endl;
+  }
+  */
+
+  for (uint32_t i = 1; i <= nStas; ++i)
+  {
+    std::cout << tp[i] << std::endl; 
+    Avg_tp += tp[i];
+    Avg_delay += mean_delay[i];
+  }
+
+  std::cout << "  Throughput: " << Avg_tp/nStas << " Mbps" << std::endl;
+  std::cout << "  Mean delay:   " << Avg_delay/nStas << "s" << std::endl;
 
   Simulator::Destroy ();
-
   std::cout << std::endl << "*** Application statistics ***" << std::endl;
   double thr = 0;
   uint32_t totalPacketsThr = DynamicCast<PacketSink> (sinkApp.Get (0))->GetTotalRx ();
   thr = totalPacketsThr * 8 / (simulationTime * 1000000.0); //Mbit/s
-  std::cout << "  Rx Bytes: " << totalPacketsThr << std::endl;
+  //std::cout << "  Rx Bytes: " << totalPacketsThr << std::endl;
   std::cout << "  Average Goodput: " << thr << " Mbit/s" << std::endl;
 
   uint32_t coll = 0;
