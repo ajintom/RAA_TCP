@@ -5,5 +5,7 @@ echo ${nStats[*]}
 for i in "${nStats[@]}"
 do
 echo "Running for nStats =" $i
+
+(cd ../../; pwd)
 ./waf --run 'RAA_TCP --nStas='$i
 done	

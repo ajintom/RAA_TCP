@@ -316,7 +316,7 @@ int main (int argc, char *argv[])
     for (uint32_t i = 1; i <= nStas; ++i)
   {
     std::cout << tp[i] << std::endl; 
-    if (isinf(tp[i]))
+    if (std::isinf(tp[i]))
     {
       Avg_tp += tp[i-1]; 
     } 
