@@ -63,8 +63,10 @@
 #include "ns3/wifi-mac-queue.h"
 #include "ns3/dca-txop.h" 
 #include "ns3/wifi-mac-header.h"   
-#include "ns3/log.h"   
+#include "ns3/log.h"
+#include "ns3/flow-probe.h"   
 #include <vector>
+#include <math.h>	
 #include <stdint.h>
 #include <iostream>
 #include <sstream>
@@ -266,10 +268,10 @@ int main (int argc, char *argv[])
   server.SetAttribute ("DataRate", DataRateValue (DataRate (dataRate)));
 
   for (uint32_t i = 0; i < nStas ; ++i)
-  {
-    ApplicationContainer serverApp = server.Install (sta.Get(i));
-    serverApp.Start (Seconds (1.0)); 
-  }
+	{
+	    ApplicationContainer serverApp = server.Install (sta.Get(i));
+		serverApp.Start (Seconds (1.0)); 
+	}
    
 
   sinkApp.Start (Seconds (0.0));
@@ -279,9 +281,9 @@ int main (int argc, char *argv[])
     
   if (pcapTracing)
     {  
-      wifiPhy.SetPcapDataLinkType (YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
-      wifiPhy.EnablePcap ("wifi-major", apDev);
-      wifiPhy.EnablePcap ("Station", staDev);
+		wifiPhy.SetPcapDataLinkType (YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
+      	wifiPhy.EnablePcap ("wifi-major", apDev);
+      	wifiPhy.EnablePcap ("Station", staDev);
     }  
 
   
@@ -301,22 +303,45 @@ int main (int argc, char *argv[])
 
   Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
   std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats ();
+  monitor->CheckForLostPackets ();
   
+
+//---------------------
+  //std::vector<uint32_t> ns3::FlowProbe::FlowStats::packetsDropped stats2
+  std::map<FlowId, FlowMonitor::FlowStats>::const_iterator i;
+  /*for (uint32_t j=0; j < i->second.packetsDropped.size() ; j++)
+  	{
+		NS_LOG_UNCOND << "Dropped reason " << j << " packets " << i->second.packetsDropped[j];
+	}
+*/
+  if(i->second.packetsDropped.size() != 0)
+  {
+  	std::cout<<i->second.packetsDropped.at(0)<<std::endl;
+  }
+
+  else
+  {
+  	std::cout<<"Test failed"<<std::endl;
+  }
+  	 
+//-----------------------
+ 
+
   double Avg_tp;
   double Avg_delay;
   double tp[nStas];
   double mean_delay[nStas];
   
-    for (uint32_t i = 1; i <= nStas; ++i)
-  { 
-    tp[i] = (stats[i].rxBytes * 8.0) / (stats[i].timeLastRxPacket.GetSeconds () - stats[i].timeFirstRxPacket.GetSeconds ()) / 1000000; 
-    mean_delay[i] = stats[i].delaySum.GetSeconds () / stats[i].rxPackets; 
-  }  
+  for (uint32_t i = 1; i <= nStas; ++i)
+  	{ 
+    	tp[i] = (stats[i].rxBytes * 8.0) / (stats[i].timeLastRxPacket.GetSeconds () - stats[i].timeFirstRxPacket.GetSeconds ()) / 1000000; 
+    	mean_delay[i] = stats[i].delaySum.GetSeconds () / stats[i].rxPackets; 
+  	}  
  
     for (uint32_t i = 1; i <= nStas; ++i)
   {
     std::cout << tp[i] << std::endl; 
-    if (isinf(tp[i]))
+    if (std::isinf(tp[i]))
     {
       Avg_tp += tp[i-1]; 
     } 
