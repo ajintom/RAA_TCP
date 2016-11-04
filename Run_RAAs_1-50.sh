@@ -1,6 +1,7 @@
 #! /bin/bash
 echo "Initialising and printing nStats array"
 declare -a RAA=(AparfWifiManager AmrrWifiManager AarfWifiManager AarfcdWifiManager CaraWifiManager IdealWifiManager OnoeWifiManager MinstrelHtWifiManager ConstantRateWifiManager)
+#declare -a RAA=(ConstantRateWifiManager)
 echo ${RAA[*]}
 for i in "${RAA[@]}"
 do
