@@ -95,8 +95,8 @@ MacDrop (Ptr<const Packet> p)
    mac_drop+=1;
 }
 
+
 using namespace ns3;
-using namespace std;
 
 int main (int argc, char *argv[])
 {
@@ -105,12 +105,12 @@ int main (int argc, char *argv[])
   bool sendIp = true;
   bool writeMobility = false;
   uint32_t payloadSize = 1472;                       /* Transport layer payload size in bytes. */
-  std::string dataRate = "100Mbps";                  /* Application layer datarate. */
+  std::string dataRate = "10Mbps";                   /* Application layer datarate. */
   std::string tcpVariant = "ns3::TcpCubic";        /* TCP variant type. */
   std::string phyRate = "HtMcs7";                    /* Physical layer bitrate. */
   std::string RateManager = "AarfWifiManager";
   double simulationTime = 3;                        /* Simulation time in seconds. */
-  bool pcapTracing = false;                          /* PCAP Tracing is enabled or not. */
+  bool pcapTracing = true;                          /* PCAP Tracing is enabled or not. */
   
  //LogComponentEnable("DcaTxop", LOG_LEVEL_ALL);
 
@@ -165,7 +165,8 @@ int main (int argc, char *argv[])
                               "ControlMode", StringValue ("HtMcs0"));
   }
   else
-  {   wifiHelper.SetRemoteStationManager (RateAdaptationManager);   
+  {   
+    wifiHelper.SetRemoteStationManager (RateAdaptationManager);   
   }
   //wifiHelper.SetRemoteStationManager ("ns3::AparfWifiManager");
   //wifiHelper.SetRemoteStationManager ("ns3::AmrrWifiManager");
@@ -276,7 +277,7 @@ int main (int argc, char *argv[])
   server.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
   server.SetAttribute ("DataRate", DataRateValue (DataRate (dataRate)));
 
-  for (uint32_t i = 0; i < nStas ; ++i)
+    for (uint32_t i = 0; i < nStas ; ++i)
   {
     ApplicationContainer serverApp = server.Install (sta.Get(i));
     serverApp.Start (Seconds (1.0)); 
@@ -284,9 +285,7 @@ int main (int argc, char *argv[])
    
   sinkApp.Start (Seconds (0.0));
   Simulator::Schedule (Seconds (1.1), &CalculateThroughput);
-  //Simulator::Schedule (Seconds (1.1), &TrackRate(stats));
-
-   
+     
   if (pcapTracing)
     {  
       wifiPhy.SetPcapDataLinkType (YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
@@ -301,7 +300,8 @@ int main (int argc, char *argv[])
       MobilityHelper::EnableAsciiAll (ascii.CreateFileStream ("wifi-major.mob"));
     }
 
-  Config::ConnectWithoutContext("/NodeList/1/DeviceList/1/$ns3::WifiNetDevice/Mac/MacTxDrop", MakeCallback(&MacDrop));
+  Config::ConnectWithoutContext("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxDrop", MakeCallback(&MacDrop));
+
   //flowmonitor 
   FlowMonitorHelper flowmon;
   Ptr<FlowMonitor> monitor = flowmon.InstallAll();
@@ -313,29 +313,37 @@ int main (int argc, char *argv[])
   Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
   std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats ();
   
-  double Avg_tp;
-  double Avg_delay;
+  double Avg_tp = 0;
+  double Avg_delay = 0;
   double tp[nStas];
   double mean_delay[nStas];
-  uint32_t Avg_lostPackets;
+  uint32_t Avg_lostPackets = 0;
   uint32_t mean_lostPackets[nStas];
+
   
     for (uint32_t i = 1; i <= nStas; ++i)
   { 
-    tp[i] = (stats[i].rxBytes * 8.0) / (stats[i].timeLastRxPacket.GetSeconds () - stats[i].timeFirstRxPacket.GetSeconds ()) / 1000000; 
+    //stats[i].timeLastRxPacket.GetSeconds () - stats[i].timeFirstRxPacket.GetSeconds ()
+    tp[i] = (stats[i].txBytes * 8.0) / (simulationTime) / 1000000; 
     mean_delay[i] = stats[i].delaySum.GetSeconds () / stats[i].rxPackets; 
     mean_lostPackets[i] =  stats[i].lostPackets;
   }  
- 
+    
+    uint32_t inf_flag = 1;
     for (uint32_t i = 1; i <= nStas; ++i)
   {
-    std::cout << tp[i] << std::endl; 
+    //std::cout << tp[i] << std::endl; 
+    //std::cout << mean_lostPackets[i] << std::endl; 
     if (isinf(tp[i]))
-    {
-      Avg_tp += tp[i-1]; 
+    { 
+      if(inf_flag == 1)
+      Avg_tp += 0;
+      else 
+      Avg_tp += tp[inf_flag]; 
     } 
     else 
-    {
+    { 
+      inf_flag = i;
       Avg_tp += tp[i];  
     }  
     Avg_delay += mean_delay[i];
@@ -362,9 +370,9 @@ int main (int argc, char *argv[])
     coll = coll + dca[i]->m_collision;
   }
   std::cout << "Collissions:   " << coll << std::endl;
-  std::cout << std::endl << "*** TC Layer statistics ***" << std::endl;
+  std::cout << "Mac drop:" << mac_drop << std::endl;  
 
-  std::cout << "Mac drop:" << mac_drop << std::endl;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
 
   std::ofstream myfile;
   myfile.open ("values_"+RateManager+".csv",std::ios_base::app);
@@ -377,11 +385,6 @@ int main (int argc, char *argv[])
 
     
   double averageThroughput = ((sink->GetTotalRx() * 8) / (1e6  * simulationTime));
-  // if (averageThroughput < 5.0)
-  //   {
-  //     NS_LOG_ERROR ("Obtained throughput is not in the expected boundaries!");
-  //     exit (1);
-  //   }
   std::cout << "\nAverage throughtput: " << averageThroughput << " Mbit/s" << std::endl;
   return 0;
 }

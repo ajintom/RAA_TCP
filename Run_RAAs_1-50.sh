@@ -8,7 +8,7 @@ cd ..
 cd ..
 for i in "${RAA[@]}"
 do
-	for j in {1..50}
+	for j in {42..47}
 	do
 		echo "Running RAA =" $i
 		echo "nStas=" $j
