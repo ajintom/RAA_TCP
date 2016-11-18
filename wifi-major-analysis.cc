@@ -84,8 +84,8 @@ void
 CalculateThroughput ()
 {
   Time now = Simulator::Now ();                                         /* Return the simulator's virtual time. */
-  double cur = (sink->GetTotalRx() - lastTotalRx) * (double) 8/1e5;     /* Convert Application RX Packets to MBits. */
-  std::cout << now.GetSeconds () << "s: \t" << cur << " Mbit/s" << std::endl;
+  //double cur = (sink->GetTotalRx() - lastTotalRx) * (double) 8/1e5;     /* Convert Application RX Packets to MBits. */
+  //std::cout << now.GetSeconds () << "s: \t" << cur << " Mbit/s" << std::endl;
   lastTotalRx = sink->GetTotalRx ();
   Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
 } 
@@ -333,7 +333,7 @@ int main (int argc, char *argv[])
     uint32_t inf_flag = 1;
     for (uint32_t i = 1; i <= nStas; ++i)
   {
-      if (isinf(tp[i]))
+      if (std::isinf(tp[i]))
     { 
       if(inf_flag == 1)
       Avg_tp += 0;
@@ -352,9 +352,9 @@ int main (int argc, char *argv[])
   Avg_tp =  Avg_tp/nStas;
   Avg_delay = Avg_delay/nStas;
   Avg_lostPackets = Avg_lostPackets/nStas;
-  std::cout << "  Throughput: " << Avg_tp << " Mbps" << std::endl;
-  std::cout << "  Mean delay:   " << Avg_delay << "s" << std::endl;
-  std::cout << "  Packets lost: "<< Avg_lostPackets << std::endl; // value too big, something is wrong
+  //std::cout << "  Throughput: " << Avg_tp << " Mbps" << std::endl;
+  //std::cout << "  Mean delay:   " << Avg_delay << "s" << std::endl;
+  //std::cout << "  Packets lost: "<< Avg_lostPackets << std::endl; // value too big, something is wrong
 
   Simulator::Destroy ();
   std::cout << std::endl << "*** Application statistics ***" << std::endl;
@@ -368,8 +368,8 @@ int main (int argc, char *argv[])
   {
     coll = coll + dca[i]->m_collision;
   }
-  std::cout << "Collissions:   " << coll << std::endl;
-  std::cout << "Mac drop:" << mac_drop << std::endl;  
+  //std::cout << "Collissions:   " << coll << std::endl;
+  //std::cout << "Mac drop:" << mac_drop << std::endl;  
 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
   std::ofstream myfile;
