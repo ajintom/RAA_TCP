@@ -70,18 +70,49 @@ NS_LOG_COMPONENT_DEFINE ("wifi-major-dcatxop");
 using namespace ns3;
 uint32_t mac_drop = 0;
 Ptr<PacketSink> apSink, staSink;                         /* Pointer to the packet sink application */  
-uint64_t lastTotalRx = 0;                     /* The value of the last total received bytes */
+uint64_t lastTotalRxAp = 0;  
+const uint32_t nStas = 30;
+uint64_t lastTotalRxSta[nStas] = {};
 ApplicationContainer sinkApps;
 
+void initialize ()
+{
+  for (uint32_t i = 0; i < nStas; ++i)
+  {
+    lastTotalRxSta[i] = 0;
+  }
+}
 
 /*calculate throughput*/
 void
 CalculateThroughput ()
 {
-  Time now = Simulator::Now ();                                         /* Return the simulator's virtual time. */
-  double cur = (apSink->GetTotalRx() - lastTotalRx) * (double) 8/1e5;     /* Convert Application RX Packets to MBits. */
-  std::cout << now.GetSeconds () << "s: \t" << cur << " Mbit/s" << std::endl;
-  lastTotalRx = apSink->GetTotalRx ();
+  Time now = Simulator::Now ();
+
+  /* Calculate throughput for downlink */
+  double sumRx = 0, avgRx = 0; 
+  for (uint32_t i = 0; i < nStas; ++i)
+    {
+      staSink = StaticCast<PacketSink>(sinkApps.Get(i));
+      double curRxSta = (staSink->GetTotalRx() - lastTotalRxSta[i]) * (double) 8/1e5; 
+      lastTotalRxSta[i] = staSink->GetTotalRx ();
+      sumRx += curRxSta;
+    } 
+  avgRx = sumRx/nStas;  
+  
+  /* Calculate throughput for uplink */
+  double curRxAp = (apSink->GetTotalRx() - lastTotalRxAp) * (double) 8/1e5;    
+  lastTotalRxAp = apSink->GetTotalRx (); 
+  curRxAp = curRxAp/nStas;                             
+  
+  /* Log to CSV */ 
+  std::cout << now.GetSeconds () << "s: \t" << avgRx << " " << curRxAp << " Mbit/s" << std::endl;
+  std::ofstream myfile;
+  myfile.open ("uplink_downlink.csv",std::ios_base::app);
+  myfile << std::endl;
+  myfile << avgRx << ",";
+  myfile << curRxAp << ",";
+  myfile.close();
   Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
 } 
 
@@ -98,15 +129,14 @@ using namespace ns3;
 int main (int argc, char *argv[])
 {
   uint32_t nWifis = 1;
-  uint32_t nStas = 10;
   bool sendIp = true;
   bool writeMobility = false;
   uint32_t payloadSize = 1472;                       /* Transport layer payload size in bytes. */
   std::string dataRate = "10Mbps";                   /* Application layer datarate. */
   std::string tcpVariant = "ns3::TcpNewReno";        /* TCP variant type. */
   std::string phyRate = "HtMcs7";                    /* Physical layer bitrate. */
-  std::string RateManager = "OnoeWifiManager";
-  double simulationTime = 3;                        /* Simulation time in seconds. */
+  std::string RateManager = "ConstantRateWifiManager";
+  double simulationTime = 100;                        /* Simulation time in seconds. */
   bool pcapTracing = false;                          /* PCAP Tracing is enabled or not. */
     
  //LogComponentEnable("DcaTxop", LOG_LEVEL_ALL);
@@ -114,7 +144,7 @@ int main (int argc, char *argv[])
   CommandLine cmd;
   cmd.AddValue ("RateManager", "RateManager", RateManager);
   cmd.AddValue ("nWifis", "Number of wifi networks", nWifis);
-  cmd.AddValue ("nStas", "Number of stations per wifi network", nStas);
+  //cmd.AddValue ("nStas", "Number of stations per wifi network", nStas);
   cmd.AddValue ("SendIp", "Send Ipv4 or raw packets", sendIp);
   cmd.AddValue ("writeMobility", "Write mobility trace", writeMobility);
   cmd.AddValue ("payloadSize", "Payload size in bytes", payloadSize);
@@ -283,7 +313,7 @@ int main (int argc, char *argv[])
     sourceApps.Stop(Seconds (simulationTime));
   }
   PacketSinkHelper sink ("ns3::TcpSocketFactory",
-                        InetSocketAddress (apInterface.GetAddress (0), 5555));
+                        InetSocketAddress (Ipv4Address::GetAny (), 5555));
   sinkApps = sink.Install (sta);
   sinkApps.Start (Seconds (0.0));
   sinkApps.Stop (Seconds (simulationTime));
@@ -312,7 +342,7 @@ int main (int argc, char *argv[])
 
   /* Populate routing table */
   Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
-  //Simulator::Schedule (Seconds (1.1), &CalculateThroughput);
+  Simulator::Schedule (Seconds (1.1), &CalculateThroughput);
     
   /* PcaP Tracing */   
   if (pcapTracing)
@@ -343,83 +373,20 @@ int main (int argc, char *argv[])
   Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
   std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats ();
   
-  /* Calculate Parameters */
-  double Avg_uplink_tp = 0;
-  double Avg_downlink_tp = 0;
-  double Avg_delay = 0;
-  double uplink_tp[nStas];
-  double downlink_tp[nStas];
-  double mean_delay[nStas];
   uint32_t Avg_lostPackets = 0;
   uint32_t mean_lostPackets[nStas];
-
   
     for (uint32_t i = 1; i <= nStas; ++i)
   { 
-    //stats[i].timeLastRxPacket.GetSeconds () - stats[i].timeFirstRxPacket.GetSeconds ()
-    uplink_tp[i] = (stats[i].txBytes * 8.0) / (simulationTime) / 1000000; 
-    downlink_tp[i] = (stats[i].rxBytes * 8.0) / (simulationTime) / 1000000; 
-    mean_delay[i] = stats[i].delaySum.GetSeconds () / stats[i].rxPackets; 
     mean_lostPackets[i] =  stats[i].lostPackets;
-  }  
-    
-    uint32_t upinf_flag = 1;
-    uint32_t downinf_flag = 1;
-    for (uint32_t i = 1; i <= nStas; ++i)
-  {
-      if (isinf(uplink_tp[i]))
-    { 
-      if(upinf_flag == 1)
-      Avg_uplink_tp += 0;
-      else 
-      Avg_uplink_tp += uplink_tp[upinf_flag]; 
-    } 
-    else 
-    { 
-      upinf_flag = i;
-      Avg_uplink_tp += uplink_tp[i];  
-    } 
-
-    if (isinf(downlink_tp[i]))
-    { 
-      if(downinf_flag == 1)
-      Avg_downlink_tp += 0;
-      else 
-      Avg_downlink_tp += downlink_tp[downinf_flag]; 
-    } 
-    else 
-    { 
-      downinf_flag = i;
-      Avg_downlink_tp += downlink_tp[i];  
-    } 
-
-    Avg_delay += mean_delay[i];
     Avg_lostPackets+=mean_lostPackets[i];
   }  
-  
-  Avg_uplink_tp =  Avg_uplink_tp/nStas;
-  Avg_downlink_tp =  Avg_downlink_tp/nStas;
-  Avg_delay = Avg_delay/nStas;
+
   Avg_lostPackets = Avg_lostPackets/nStas;
-  std::cout << "  Throughput: " << Avg_uplink_tp << " Mbps" << std::endl;
-  std::cout << "  Throughput: " << Avg_downlink_tp << " Mbps" << std::endl;
-  std::cout << "  Mean delay:   " << Avg_delay << "s" << std::endl;
   std::cout << "  Packets lost: "<< Avg_lostPackets << std::endl; // value too big, something is wrong
 
   Simulator::Destroy ();
   
-  /* Overall Goodput at the AP */
-  std::cout << std::endl << "*** Application statistics ***" << std::endl;
-  double thr = 0;
-  uint32_t totalPacketsThr = DynamicCast<PacketSink> (sinkApp.Get (0))->GetTotalRx ();
-  thr = totalPacketsThr * 8 / (simulationTime * 1000000.0); //Mbit/s
-  std::cout << "  Average Goodput: " << thr << " Mbit/s" << std::endl;
-
-  /* Average throughput at AP */  
-  double averageThroughput = ((apSink->GetTotalRx() * 8) / (1e6  * simulationTime));
-  std::cout << "\nAverage throughtput: " << averageThroughput << " Mbit/s" << std::endl;
-  
-
   /* Calculate Collisions */ 
   uint32_t coll = 0;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
   for (uint32_t i = 0; i < nStas; ++i)                                                                                                                                                                                                                                        
@@ -429,16 +396,6 @@ int main (int argc, char *argv[])
   std::cout << "Collissions:   " << coll << std::endl;
   std::cout << "Mac drop:" << mac_drop << std::endl;  
 
-  /* Write to CSV file */                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
-  std::ofstream myfile;
-  myfile.open ("values_"+RateManager+".csv",std::ios_base::app);
-  myfile << std::endl;
-  myfile << Avg_uplink_tp << ",";
-  myfile << Avg_downlink_tp << ",";
-  myfile << Avg_delay << ",";
-  myfile << thr << ",";
-  myfile << coll << ",";
-  myfile.close();
-  
+ 
   return 0;
 }
