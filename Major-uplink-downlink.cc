@@ -100,15 +100,17 @@ CalculateThroughput ()
     } 
   avgRx = sumRx/nStas;  
   
+
   /* Calculate throughput for uplink */
   double curRxAp = (apSink->GetTotalRx() - lastTotalRxAp) * (double) 8/1e5;    
   lastTotalRxAp = apSink->GetTotalRx (); 
   curRxAp = curRxAp/nStas;                             
   
+
   /* Log to CSV */ 
   std::cout << now.GetSeconds () << "s: \t" << avgRx << " " << curRxAp << " Mbit/s" << std::endl;
   std::ofstream myfile;
-  myfile.open ("uplink_downlink.csv",std::ios_base::app);
+  myfile.open ("OnoeWifiManager.csv",std::ios_base::app);
   myfile << std::endl;
   myfile << avgRx << ",";
   myfile << curRxAp << ",";
@@ -132,10 +134,10 @@ int main (int argc, char *argv[])
   bool sendIp = true;
   bool writeMobility = false;
   uint32_t payloadSize = 1472;                       /* Transport layer payload size in bytes. */
-  std::string dataRate = "10Mbps";                   /* Application layer datarate. */
+  std::string dataRate = "10Kbps";                   /* Application layer datarate. */
   std::string tcpVariant = "ns3::TcpNewReno";        /* TCP variant type. */
   std::string phyRate = "HtMcs7";                    /* Physical layer bitrate. */
-  std::string RateManager = "ConstantRateWifiManager";
+  std::string RateManager = "OnoeWifiManager";
   double simulationTime = 100;                        /* Simulation time in seconds. */
   bool pcapTracing = false;                          /* PCAP Tracing is enabled or not. */
     
@@ -307,7 +309,7 @@ int main (int argc, char *argv[])
   {
     BulkSendHelper source ("ns3::TcpSocketFactory",
                           InetSocketAddress(staInterface.GetAddress (i), 5555));
-    source.SetAttribute ("MaxBytes", UintegerValue (0));
+    source.SetAttribute ("MaxBytes", UintegerValue (100e6));
     ApplicationContainer sourceApps = source.Install (p2pNodes.Get(1));
     sourceApps.Start(Seconds (0.0));
     sourceApps.Stop(Seconds (simulationTime));
@@ -317,9 +319,9 @@ int main (int argc, char *argv[])
   sinkApps = sink.Install (sta);
   sinkApps.Start (Seconds (0.0));
   sinkApps.Stop (Seconds (simulationTime));
+  
 
-
-  /* upload traffic */
+  /* upload traffic */ 
   PacketSinkHelper sinkHelper ("ns3::TcpSocketFactory", InetSocketAddress (Ipv4Address::GetAny(), 8080));  
   ApplicationContainer sinkApp = sinkHelper.Install (backboneNodes.Get (0));
   apSink = StaticCast<PacketSink> (sinkApp.Get (0));
