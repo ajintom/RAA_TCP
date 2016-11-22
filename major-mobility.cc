@@ -124,6 +124,18 @@ MacDrop (Ptr<const Packet> p)
    mac_drop+=1;
 }
 
+/*
+void PrintPositions ()
+{
+    for (uint32_t i=0; i <NodeList::GetNNodes(); i++ )
+    {
+      Ptr<MobilityModel> mob = nodes.Get(i)->GetObject<MobilityModel>();
+      Vector pos = mob->GetPosition ();
+      std::cout << "POS: x=" << pos.x << ", y=" << pos.y << std::endl;
+    }
+//Simulator::Schedule(Seconds(1), MakeCallback(&PrintPositions));
+}
+*/
 
 using namespace ns3;
 
@@ -233,6 +245,7 @@ int main (int argc, char *argv[])
   Ssid ssid = Ssid (oss.str ());
   
   MobilityHelper mobility;
+  MobilityHelper mobility1;
   /* Mobility of AP */         
   mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
                                  "MinX", DoubleValue (0.0),
@@ -257,25 +270,41 @@ int main (int argc, char *argv[])
                                  "Y", DoubleValue (0.0),
                                  "Rho", StringValue ("ns3::UniformRandomVariable[Min=0|Max=10]")); //decide radius here
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel"); //nodes wont move
-  mobility.Install (sta);
+
+  mobility1.SetMobilityModel ("ns3::RandomDirection2dMobilityModel",
+                              "Bounds", RectangleValue (Rectangle (0, 50, 0, 50)),
+                              "Speed", StringValue ("ns3::ConstantRandomVariable[Constant=20]"),
+                              "Pause", StringValue ("ns3::ConstantRandomVariable[Constant=0.2]"));
+
+  //mobility.Install(sta);
+  mobility1.Install (sta.Get(0));
+  mobility.Install (sta.Get(1));
+  mobility.Install (sta.Get(2));
   mobility.Install (ServerNode);
 
+//moving one node using mobility
+
+/*
+
+//moving node(1)
   MobilityHelper movement;
   Ptr<ListPositionAllocator> stationPositionAlloc = CreateObject<ListPositionAllocator>();
-  stationPositionAlloc -> Add(Vector(0.0, 0.0, 0.0)); // starting position
-  stationPositionAlloc -> Add(Vector(1000.0, 0.0, 0.0)); // it is the ending position that the station moves
+  stationPositionAlloc -> Add(Vector(0.0, 0.0, 0.0)); // position1
+ // stationPositionAlloc -> Add(Vector(1000.0, 0.0, 0.0)); // position2
   movement.SetPositionAllocator(stationPositionAlloc);
   movement.SetMobilityModel("ns3::ConstantVelocityMobilityModel");
   movement.Install(sta.Get(1));//movement only on one node 
-  (sta.Get(1) -> GetObject<ConstantVelocityMobilityModel>()) -> SetVelocity(Vector(20.0, 0.0, 0.0));
+  (sta.Get(1) -> GetObject<ConstantVelocityMobilityModel>()) -> SetVelocity(Vector(10.0, 0.0, 0.0));
 
-/*  Here a timer should run, need to figure out how to do that
-    then move the node in reverse direction probably, for now:
-  (sta.Get(1) -> GetObject<ConstantVelocityMobilityModel>()) -> SetVelocity(Vector(-20.0, 0.0, 0.0));
+ Here a timer should run, need to figure out how to do that
+    then move the node in reverse direction [p]
+
 
 */
 
 //movement.Install(sta);//should we have separate NodeContainers for fixed and moving nodes?
+
+
 
 
 
@@ -364,7 +393,7 @@ int main (int argc, char *argv[])
   /* Populate routing table */
   Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
   Simulator::Schedule (Seconds (1.1), &CalculateThroughput);
-    
+
   /* PcaP Tracing */   
   if (pcapTracing)
     {  
