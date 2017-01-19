@@ -110,26 +110,58 @@ Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius)
   m_nodePosAlloc = CreateObject<ListPositionAllocator> ();
   
   for(size_t i=0; i<m_apNumber; ++i){
-    m_apPosAlloc->Add(Vector(m_radius*std::cos(i*2*PI/m_apNumber), 
-                      m_radius*std::sin(i*2*PI/m_apNumber), 1)); 
-    //m_apPosAlloc->Add(Vector(m_radius*i,0, 1));
-    //m_apPosAlloc->Add(Vector(m_radius, 0, 1));
+
+   //m_apPosAlloc->Add(Vector((160*i), 0, 1)); //A1,A2 - Case 1 
+   //m_apPosAlloc->Add(Vector((500*i), 0, 1)); //A1,A2 - Case 2 
+   //m_apPosAlloc->Add(Vector((60*i)+90, 0, 1)); //A1,A2 - Case 3 
+   m_apPosAlloc->Add(Vector((260*i)+90, 0, 1)); //A1,A2 - Case 4 
   }
   m_mobility.SetPositionAllocator(m_apPosAlloc);
   for(size_t i=0; i<m_apNumber; ++i){
     m_mobility.Install(m_nodes.Get(i));  
   }
-  
+
+
+//Case 1 : Spatial + Channel Overlap
+// A1-0 (0,0)------------160----------------- A2-1(160,0)
+// ------------C1-2(80,0)----C2-3(80,0)--------------- 
+// ------0.724759 Mbps---------------0.720746 Mbps--------------------1.44553
+
+
+//Case 2 : No Spatial + Yes Channel Overlap
+// A1-0 (0,0)------------500----------------- A2-1(500,0)
+// ------------C1-2(0,80)----C2-3(500,80)--------------- 
+// ------1.3841 Mbps---------------1.37929 Mbps-----------------------2.76342
+
+//Case 3 : AP-AP interference
+// C1       A1       C2        C3      A2      C4
+// 0        90       110       130     150     180
+// Cx = 0,110,130,180  
+
+// C1 A1 - 0.302986 Mbps
+// C2 A1 - 0.425786 Mbps
+// C3 A2 - 0.302585 Mbps
+// C4 A2 - 0.424983 Mbps
+//throughput=1.4564
+
+//Case 4 : No AP-AP interference
+// C1       A1       C2        C3      A2      C4
+// 0        90       110       330     350     380 
+
+// C1 A1 - 0.559421 Mbps
+// C2 A1 - 0.797395 Mbps
+// C3 A2 - 0.57748 Mbps
+// C4 A2 - 0.786159 Mbps
+//throughput=2.72051
+
+
   for(size_t i=0; i<m_nodeNumber; ++i){
-   size_t inAp = i/(m_nodeNumber/m_apNumber);
-   double nodeRadius = rand()%120+(rand()%1000)/1000;
-   m_nodePosAlloc->Add(Vector(m_radius*std::cos(inAp*2*PI/m_apNumber)+
-                       nodeRadius*std::cos((rand()%(2*PI_e5))/pow(10, 5)), 
-                       m_radius*std::sin(inAp*2*PI/m_apNumber)+
-                       nodeRadius*std::sin((rand()%(2*PI_e5))/pow(10, 5)), 
-                       1)); 
-   //m_nodePosAlloc->Add(Vector(m_radius*i,m_radius*(i+1),1));                              
-   //m_nodePosAlloc->Add(Vector(0, 0, 1));
+
+  //m_nodePosAlloc->Add(Vector(80, 0, 1)); //C1,C2 - Case 1
+  //m_nodePosAlloc->Add(Vector((500*i), 80, 1)); //C1,C2 - Case 2
+  //m_nodePosAlloc->Add(Vector(( (20*i*i*i)-(105*i*i)+(195*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 3
+  m_nodePosAlloc->Add(Vector(( (-46.67*i*i*i)+(195*i*i)-(38.33*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 4
+  
   }
   m_mobility.SetPositionAllocator(m_nodePosAlloc);
   for(size_t i=0; i<m_nodeNumber; ++i){
@@ -158,8 +190,8 @@ Experiment::InstallDevices()
                                 
   m_wifiPhy =  YansWifiPhyHelper::Default ();
   m_wifiPhy.SetChannel (m_wifiChannel.Create());
-  m_wifiPhy.Set ("EnergyDetectionThreshold", DoubleValue (-110.0) );
-  m_wifiPhy.Set ("CcaMode1Threshold", DoubleValue (-110.0) );
+  m_wifiPhy.Set ("EnergyDetectionThreshold", DoubleValue (-95.0) );
+  m_wifiPhy.Set ("CcaMode1Threshold", DoubleValue (-95.0) );
   m_wifiPhy.Set ("TxPowerStart", DoubleValue (23.0) );
   m_wifiPhy.Set ("TxPowerEnd", DoubleValue (23.0) );
   m_wifiPhy.Set ("ChannelNumber", UintegerValue (1) );
@@ -249,7 +281,7 @@ Experiment::InstallApplication(size_t in_packetSize, size_t in_dataRate)
       }
       s2 = ss2.str() + "bps";
       onOffHelper.SetAttribute ("DataRate", StringValue (s2));
-      //onOffHelper.SetAttribute ("MaxBytes", UintegerValue (2048));
+      onOffHelper.SetAttribute ("MaxBytes", UintegerValue (100000));
       if(m_downlinkUplink){
         onOffHelper.SetAttribute ("StartTime", TimeValue (Seconds (1.00+static_cast<double>(i)/100)));
         onOffHelper.SetAttribute ("StopTime", TimeValue (Seconds (50.000+static_cast<double>(i)/100)));
@@ -372,16 +404,16 @@ int main (int argc, char **argv)
   modes.push_back ("DsssRate5_5Mbps");
   modes.push_back ("DsssRate11Mbps");
   std::cout << "Hidden station experiment with RTS/CTS disabled:\n" << std::flush;
-  for(size_t i=2; i<3; ++i){
+  for(size_t i=1; i<2; ++i){
     for(size_t j=0; j<1; ++j){
       for(size_t k=2; k<3; ++k){
         std::cout << "Range=" << range[j] << ", Mode=" << modes[k] << "\n";
         Experiment exp(Downlink, modes[k]);
         exp.SetRtsCts(true);
-        exp.CreateNode(numOfAp[i], 9, range[j]);
+        exp.CreateNode(numOfAp[i], 4, range[j]);
         exp.InitialExperiment();
         exp.InstallApplication(1024, 5500000);
-        exp.Run(50);  
+        exp.Run(20);  
       }
     }
   }
@@ -403,3 +435,19 @@ int main (int argc, char **argv)
   */
   return 0;
 }
+
+
+    // m_apPosAlloc->Add(Vector(m_radius*std::cos(i*2*PI/m_apNumber), 
+    //                   m_radius*std::sin(i*2*PI/m_apNumber), 1)); 
+   // m_apPosAlloc->Add(Vector(m_radius*i,0, 1));
+
+
+
+   // size_t inAp = i/(m_nodeNumber/m_apNumber);
+   // double nodeRadius = rand()%120+(rand()%1000)/1000;
+   // m_nodePosAlloc->Add(Vector(m_radius*std::cos(inAp*2*PI/m_apNumber)+
+   //                     nodeRadius*std::cos((rand()%(2*PI_e5))/pow(10, 5)), 
+   //                     m_radius*std::sin(inAp*2*PI/m_apNumber)+
+   //                     nodeRadius*std::sin((rand()%(2*PI_e5))/pow(10, 5)), 
+   //                     1)); 
+   //m_nodePosAlloc->Add(Vector(m_radius*i,m_radius*(i+1),1)); 
