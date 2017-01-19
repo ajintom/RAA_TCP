@@ -6,6 +6,7 @@
 #include "ns3/internet-module.h"
 #include "ns3/flow-monitor-module.h"
 #include "ns3/wifi-module.h"
+#include "ns3/netanim-module.h"
 
 #include <cmath>
 #include <iomanip>
@@ -110,7 +111,8 @@ Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius)
   
   for(size_t i=0; i<m_apNumber; ++i){
     m_apPosAlloc->Add(Vector(m_radius*std::cos(i*2*PI/m_apNumber), 
-                      m_radius*std::sin(i*2*PI/m_apNumber), 1));
+                      m_radius*std::sin(i*2*PI/m_apNumber), 1)); 
+    //m_apPosAlloc->Add(Vector(m_radius*i,0, 1));
     //m_apPosAlloc->Add(Vector(m_radius, 0, 1));
   }
   m_mobility.SetPositionAllocator(m_apPosAlloc);
@@ -125,7 +127,8 @@ Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius)
                        nodeRadius*std::cos((rand()%(2*PI_e5))/pow(10, 5)), 
                        m_radius*std::sin(inAp*2*PI/m_apNumber)+
                        nodeRadius*std::sin((rand()%(2*PI_e5))/pow(10, 5)), 
-                       1));
+                       1)); 
+   //m_nodePosAlloc->Add(Vector(m_radius*i,m_radius*(i+1),1));                              
    //m_nodePosAlloc->Add(Vector(0, 0, 1));
   }
   m_mobility.SetPositionAllocator(m_nodePosAlloc);
@@ -155,8 +158,8 @@ Experiment::InstallDevices()
                                 
   m_wifiPhy =  YansWifiPhyHelper::Default ();
   m_wifiPhy.SetChannel (m_wifiChannel.Create());
-  m_wifiPhy.Set ("EnergyDetectionThreshold", DoubleValue (-95.0) );
-  m_wifiPhy.Set ("CcaMode1Threshold", DoubleValue (-95.0) );
+  m_wifiPhy.Set ("EnergyDetectionThreshold", DoubleValue (-110.0) );
+  m_wifiPhy.Set ("CcaMode1Threshold", DoubleValue (-110.0) );
   m_wifiPhy.Set ("TxPowerStart", DoubleValue (23.0) );
   m_wifiPhy.Set ("TxPowerEnd", DoubleValue (23.0) );
   m_wifiPhy.Set ("ChannelNumber", UintegerValue (1) );
@@ -246,6 +249,7 @@ Experiment::InstallApplication(size_t in_packetSize, size_t in_dataRate)
       }
       s2 = ss2.str() + "bps";
       onOffHelper.SetAttribute ("DataRate", StringValue (s2));
+      //onOffHelper.SetAttribute ("MaxBytes", UintegerValue (2048));
       if(m_downlinkUplink){
         onOffHelper.SetAttribute ("StartTime", TimeValue (Seconds (1.00+static_cast<double>(i)/100)));
         onOffHelper.SetAttribute ("StopTime", TimeValue (Seconds (50.000+static_cast<double>(i)/100)));
@@ -259,7 +263,7 @@ Experiment::InstallApplication(size_t in_packetSize, size_t in_dataRate)
     }
   }  
   uint16_t  echoPort = 9;   
-  // again using different start times to workaround Bug 388 and Bug 912
+  //again using different start times to workaround Bug 388 and Bug 912
   for(size_t j=1; j<=m_apNumber; ++j){
     for(size_t i=m_apNumber+m_nodeNumber/m_apNumber*(j-1); 
         i<m_apNumber+m_nodeNumber/m_apNumber*j ; ++i){
@@ -326,6 +330,7 @@ Experiment::Run(size_t in_simTime)
              MakeCallback (&Experiment::PhyRxOkTrace, this));
   Config::Connect ("/NodeList/*/DeviceList/*/Phy/State/Tx", 
              MakeCallback (&Experiment::PhyTxTrace, this));
+  AnimationInterface anim ("multiAp.xml");
   Simulator::Run ();
 
   // 10. Print per flow statistics
@@ -367,16 +372,16 @@ int main (int argc, char **argv)
   modes.push_back ("DsssRate5_5Mbps");
   modes.push_back ("DsssRate11Mbps");
   std::cout << "Hidden station experiment with RTS/CTS disabled:\n" << std::flush;
-  for(size_t i=0; i<1; ++i){
+  for(size_t i=2; i<3; ++i){
     for(size_t j=0; j<1; ++j){
       for(size_t k=2; k<3; ++k){
         std::cout << "Range=" << range[j] << ", Mode=" << modes[k] << "\n";
         Experiment exp(Downlink, modes[k]);
-        exp.SetRtsCts(false);
-        exp.CreateNode(numOfAp[i], 2, range[j]);
+        exp.SetRtsCts(true);
+        exp.CreateNode(numOfAp[i], 9, range[j]);
         exp.InitialExperiment();
         exp.InstallApplication(1024, 5500000);
-        exp.Run(60);
+        exp.Run(50);  
       }
     }
   }
