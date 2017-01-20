@@ -126,34 +126,38 @@ Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius)
 // A1-0 (0,0)------------160----------------- A2-1(160,0)
 // ------------C1-2(80,0)----C2-3(80,0)--------------- 
 // ------0.724759 Mbps---------------0.720746 Mbps--------------------1.44553
-
+//RAA:----0.943471 Mbps--------------0.919392 Mbps--------------------1.86289
 
 //Case 2 : No Spatial + Yes Channel Overlap
 // A1-0 (0,0)------------500----------------- A2-1(500,0)
 // ------------C1-2(0,80)----C2-3(500,80)--------------- 
 // ------1.3841 Mbps---------------1.37929 Mbps-----------------------2.76342
+//RAA----1.77618 Mbps--------------1.77498 Mbps-----------------------3.55119
 
 //Case 3 : AP-AP interference
 // C1       A1       C2        C3      A2      C4
 // 0        90       110       130     150     180
-// Cx = 0,110,130,180  
+// Cx = 0,110,130,180 
 
-// C1 A1 - 0.302986 Mbps
-// C2 A1 - 0.425786 Mbps
-// C3 A2 - 0.302585 Mbps
-// C4 A2 - 0.424983 Mbps
-//throughput=1.4564
+//-------------no Raa---------------RAA
+// C1 A1 - 0.302986 Mbps        0.39007 Mbps
+// C2 A1 - 0.425786 Mbps        0.536948 Mbps
+// C3 A2 - 0.302585 Mbps        0.394484 Mbps
+// C4 A2 - 0.424983 Mbps        0.764355      
+//throughput=1.4564             1.89302
+
 
 //Case 4 : No AP-AP interference
 // C1       A1       C2        C3      A2      C4
 // 0        90       110       330     350     380 
 
-// C1 A1 - 0.559421 Mbps
-// C2 A1 - 0.797395 Mbps
-// C3 A2 - 0.57748 Mbps
-// C4 A2 - 0.786159 Mbps
-//throughput=2.72051
-
+//-------------no RAA-------RAA------
+// C1 A1 - 0.559421 Mbps   0.728772 Mbps 
+// C2 A1 - 0.797395 Mbps   0.990825 Mbps
+// C3 A2 - 0.57748 Mbps    0.717535 Mbps
+// C4 A2 - 0.786159 Mbps   1.02494 Mbps
+//throughput=2.72051       3.46213
+  
 
   for(size_t i=0; i<m_nodeNumber; ++i){
 
@@ -184,8 +188,8 @@ Experiment::InstallDevices()
   //Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",
   //                            StringValue ("DsssRate2Mbps"));
   m_wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", 
-                                "DataMode",StringValue (m_modes), 
-                                "ControlMode",StringValue (m_modes));
+                              "DataMode", StringValue ("DsssRate11Mbps"), 
+                              "ControlMode", StringValue (m_modes));
                                 
                                 
   m_wifiPhy =  YansWifiPhyHelper::Default ();
@@ -281,7 +285,7 @@ Experiment::InstallApplication(size_t in_packetSize, size_t in_dataRate)
       }
       s2 = ss2.str() + "bps";
       onOffHelper.SetAttribute ("DataRate", StringValue (s2));
-      onOffHelper.SetAttribute ("MaxBytes", UintegerValue (100000));
+      //onOffHelper.SetAttribute ("MaxBytes", UintegerValue (100000));
       if(m_downlinkUplink){
         onOffHelper.SetAttribute ("StartTime", TimeValue (Seconds (1.00+static_cast<double>(i)/100)));
         onOffHelper.SetAttribute ("StopTime", TimeValue (Seconds (50.000+static_cast<double>(i)/100)));
