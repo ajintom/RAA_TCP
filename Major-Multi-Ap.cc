@@ -21,6 +21,14 @@ using namespace ns3;
 #define Uplink false
 #define PI 3.14159265
 #define PI_e5 314158
+#define simulationTime 20
+
+void CalculateThroughput();
+ApplicationContainer sinkApps;
+size_t m_apNumber;
+size_t m_nodeNumber;
+Ptr<PacketSink> staSink;
+uint64_t lastTotalRxSta[] = {};
 
 class Experiment
 {
@@ -46,8 +54,6 @@ private:
   
   bool m_enableCtsRts;
   bool m_downlinkUplink;
-  size_t m_apNumber;
-  size_t m_nodeNumber;
   double m_radius;
   size_t m_rxOkCount;
   size_t m_rxErrorCount;
@@ -56,6 +62,7 @@ private:
   std::vector<std::vector<double> > m_readChannelGain;
   std::vector<int> m_serveBy;
   NodeContainer m_nodes;
+  //NodeContainer sta_nodes;
   MobilityHelper m_mobility;
   Ptr<ListPositionAllocator> m_apPosAlloc;
   Ptr<ListPositionAllocator> m_nodePosAlloc;
@@ -78,6 +85,32 @@ Experiment::Experiment(bool in_downlinkUplink, std::string in_modes):
   m_txOkCount = 0;
 }
 
+void CalculateThroughput()
+{
+  Time now = Simulator::Now ();
+
+  /* Calculate throughput for downlink */
+  double sumRx = 0, avgRx = 0; 
+  for (uint32_t i = 0; i < m_nodeNumber; ++i)
+    {
+      staSink = StaticCast<PacketSink>(sinkApps.Get(m_apNumber + i));
+      double curRxSta = (staSink->GetTotalRx() - lastTotalRxSta[i]) * (double) 8/1e5; 
+      lastTotalRxSta[i] = staSink->GetTotalRx ();
+      sumRx += curRxSta;
+    } 
+  avgRx = sumRx/m_nodeNumber;
+
+  /* Log to CSV */ 
+  std::cout << now.GetSeconds () << "s: \t" << avgRx << " Mbit/s" << std::endl;
+  /*std::ofstream myfile;
+  myfile.open ("downlink.csv",std::ios_base::app);
+  myfile << std::endl;
+  myfile << avgRx << ",";
+  //myfile << curRxAp << ",";
+  myfile.close();*/
+  Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
+} 
+
 void
 Experiment::InitialExperiment()
 {
@@ -95,14 +128,16 @@ Experiment::SetRtsCts(bool in_enableCtsRts)
 }
 
 
-void
-Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius)
+void Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius)
 {  
   m_apNumber = in_ap;
   m_nodeNumber = in_nodeNumber;
   m_radius = in_radius; 
   
   m_nodes.Create(m_apNumber+m_nodeNumber);
+  /*for(size_t i=0; i<m_nodeNumber; ++i){
+    sta_nodes[i]=m_nodes.Get(m_apNumber + i);
+  }*/
   
   m_mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
   m_mobility.SetMobilityModel ("ns3::ConstantVelocityMobilityModel");
@@ -113,8 +148,8 @@ Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius)
 
   // m_apPosAlloc->Add(Vector((160*i), 0, 1)); //A1,A2 - Case 1 
    //m_apPosAlloc->Add(Vector((500*i), 0, 1)); //A1,A2 - Case 2 
-   //m_apPosAlloc->Add(Vector((60*i)+90, 0, 1)); //A1,A2 - Case 3 
-   m_apPosAlloc->Add(Vector((260*i)+90, 0, 1)); //A1,A2 - Case 4 
+   m_apPosAlloc->Add(Vector((60*i)+90, 0, 1)); //A1,A2 - Case 3 
+   //m_apPosAlloc->Add(Vector((260*i)+90, 0, 1)); //A1,A2 - Case 4 
   }
   m_mobility.SetPositionAllocator(m_apPosAlloc);
   for(size_t i=0; i<m_apNumber; ++i){
@@ -166,8 +201,8 @@ Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius)
 
   //m_nodePosAlloc->Add(Vector(80, 0, 1)); //C1,C2 - Case 1
   //m_nodePosAlloc->Add(Vector((500*i), 80, 1)); //C1,C2 - Case 2
-  //m_nodePosAlloc->Add(Vector(( (20*i*i*i)-(105*i*i)+(195*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 3
-  m_nodePosAlloc->Add(Vector(( (-46.67*i*i*i)+(195*i*i)-(38.33*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 4
+  m_nodePosAlloc->Add(Vector(( (20*i*i*i)-(105*i*i)+(195*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 3
+  //m_nodePosAlloc->Add(Vector(( (-46.67*i*i*i)+(195*i*i)-(38.33*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 4
   
   }
   m_mobility.SetPositionAllocator(m_nodePosAlloc);
@@ -262,25 +297,36 @@ void
 Experiment::InstallApplication(size_t in_packetSize, size_t in_dataRate)
 {
   uint16_t cbrPort = 12345;
+  uint16_t  echoPort = 9;
+  //uint16_t sinkPort = 5555;
   for(size_t j=1; j<=m_apNumber; ++j){
     for(size_t i=m_apNumber+m_nodeNumber/m_apNumber*(j-1); 
         i<m_apNumber+m_nodeNumber/m_apNumber*j ; ++i){
       std::string s;
       std::stringstream ss(s);
+      std::cout << m_downlinkUplink << "-----------------------";  
       if(m_downlinkUplink){
+
          ss << i+1;
       }else
       {
         ss << j;
       }
       s = "10.0.0."+ss.str();
-      OnOffHelper onOffHelper ("ns3::UdpSocketFactory", 
+      OnOffHelper onOffHelper ("ns3::TcpSocketFactory", 
                InetSocketAddress (Ipv4Address (s.c_str()), cbrPort));
       onOffHelper.SetAttribute ("PacketSize", UintegerValue (in_packetSize));
 //onOffHelper.SetAttribute ("OnTime",  StringValue ("ns3::ConstantRandomVariable[Constant=1]"));
 //onOffHelper.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
       std::string s2;
       std::stringstream ss2(s2);
+
+      PacketSinkHelper sink ("ns3::TcpSocketFactory",
+                        InetSocketAddress (Ipv4Address(s.c_str()),  cbrPort));
+      sinkApps = sink.Install (m_nodes);
+      sinkApps.Start (Seconds (0.00));
+      sinkApps.Stop (Seconds (simulationTime));
+
       if(m_downlinkUplink){
         ss2 << in_dataRate+i*100;
       }else
@@ -302,7 +348,7 @@ Experiment::InstallApplication(size_t in_packetSize, size_t in_dataRate)
       }
     }
   }  
-  uint16_t  echoPort = 9;   
+     
   //again using different start times to workaround Bug 388 and Bug 912
   for(size_t j=1; j<=m_apNumber; ++j){
     for(size_t i=m_apNumber+m_nodeNumber/m_apNumber*(j-1); 
@@ -357,6 +403,8 @@ void
 Experiment::Run(size_t in_simTime)
 { 
   // 8. Install FlowMonitor on all nodes
+  Simulator::Schedule (Seconds (1.1), &CalculateThroughput);
+
   ShowNodeInformation(m_nodes, m_apNumber+m_nodeNumber);
   
   FlowMonitorHelper flowmon;
@@ -421,7 +469,7 @@ int main (int argc, char **argv)
         exp.CreateNode(numOfAp[i], 4, range[j]);
         exp.InitialExperiment();
         exp.InstallApplication(1024, 5500000);
-        exp.Run(20);  
+        exp.Run(simulationTime);  
       }
     }
   }
