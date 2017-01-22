@@ -21,7 +21,7 @@ using namespace ns3;
 #define Uplink false
 #define PI 3.14159265
 #define PI_e5 314158
-#define simulationTime 20
+#define simulationTime 50
 
 void CalculateThroughput();
 ApplicationContainer sinkApps;
@@ -101,13 +101,13 @@ void CalculateThroughput()
   avgRx = sumRx/m_nodeNumber;
 
   /* Log to CSV */ 
-  std::cout << now.GetSeconds () << "s: \t" << avgRx << " Mbit/s" << std::endl;
-  /*std::ofstream myfile;
+  //std::cout << now.GetSeconds () << "s: \t" << avgRx << " Mbit/s" << std::endl;
+  std::ofstream myfile;
   myfile.open ("downlink.csv",std::ios_base::app);
   myfile << std::endl;
   myfile << avgRx << ",";
   //myfile << curRxAp << ",";
-  myfile.close();*/
+  myfile.close();
   Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
 } 
 
@@ -146,9 +146,9 @@ void Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius
   
   for(size_t i=0; i<m_apNumber; ++i){
 
-  // m_apPosAlloc->Add(Vector((160*i), 0, 1)); //A1,A2 - Case 1 
+    m_apPosAlloc->Add(Vector((160*i), 0, 1)); //A1,A2 - Case 1 
    //m_apPosAlloc->Add(Vector((500*i), 0, 1)); //A1,A2 - Case 2 
-   m_apPosAlloc->Add(Vector((60*i)+90, 0, 1)); //A1,A2 - Case 3 
+   //m_apPosAlloc->Add(Vector((60*i)+90, 0, 1)); //A1,A2 - Case 3 
    //m_apPosAlloc->Add(Vector((260*i)+90, 0, 1)); //A1,A2 - Case 4 
   }
   m_mobility.SetPositionAllocator(m_apPosAlloc);
@@ -156,52 +156,11 @@ void Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius
     m_mobility.Install(m_nodes.Get(i));  
   }
 
-
-//Case 1 : Spatial + Channel Overlap
-// A1-0 (0,0)------------160----------------- A2-1(160,0)
-// ------------C1-2(80,0)----C2-3(80,0)--------------- 
-// ------0.724759 Mbps---------------0.720746 Mbps--------------------1.44553
-//CR:----0.943471 Mbps--------------0.919392 Mbps--------------------1.86289
-//M:-----0.800204 Mbps--------------0.798599 Mbps--------------------1.59883
-
-
-//Case 2 : No Spatial + Yes Channel Overlap
-// A1-0 (0,0)------------500----------------- A2-1(500,0)
-// ------------C1-2(0,80)----C2-3(500,80)--------------- 
-// ------1.3841 Mbps---------------1.37929 Mbps-----------------------2.76342
-//CR----1.77618 Mbps--------------1.77498 Mbps-----------------------3.55119
-//M:-----1.54102 Mbps--------------1.52577 Mbps-----------------------3.06681
-
-//Case 3 : AP-AP interference
-// C1       A1       C2        C3      A2      C4
-// 0        90       110       130     150     180
-// Cx = 0,110,130,180 
-
-//-------------no Raa---------------CR------------------M
-// C1 A1 - 0.302986 Mbps        0.39007 Mbps--------0.326262 Mbps
-// C2 A1 - 0.425786 Mbps        0.536948 Mbps-------0.452673 Mbps
-// C3 A2 - 0.302585 Mbps        0.394484 Mbps-------0.344722 Mbps
-// C4 A2 - 0.424983 Mbps        0.764355 Mbps-------0.470732 Mbps     
-//throughput=1.4564             1.89302-------------1.59445
-
-
-//Case 4 : No AP-AP interference
-// C1       A1       C2        C3      A2      C4
-// 0        90       110       330     350     380 
-
-//-------------no RAA-------CR--------------M
-// C1 A1 - 0.559421 Mbps   0.728772 Mbps----0.615202 Mbps
-// C2 A1 - 0.797395 Mbps   0.990825 Mbps----0.858795 Mbps
-// C3 A2 - 0.57748 Mbps    0.717535 Mbps----0.607176 Mbps
-// C4 A2 - 0.786159 Mbps   1.02494 Mbps-----0.854381 Mbps
-//throughput=2.72051       3.46213----------2.93561
-
-
   for(size_t i=0; i<m_nodeNumber; ++i){
 
-  //m_nodePosAlloc->Add(Vector(80, 0, 1)); //C1,C2 - Case 1
+  m_nodePosAlloc->Add(Vector(80, 0, 1)); //C1,C2 - Case 1
   //m_nodePosAlloc->Add(Vector((500*i), 80, 1)); //C1,C2 - Case 2
-  m_nodePosAlloc->Add(Vector(( (20*i*i*i)-(105*i*i)+(195*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 3
+  //m_nodePosAlloc->Add(Vector(( (20*i*i*i)-(105*i*i)+(195*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 3
   //m_nodePosAlloc->Add(Vector(( (-46.67*i*i*i)+(195*i*i)-(38.33*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 4
   
   }
@@ -225,10 +184,10 @@ Experiment::InstallDevices()
   m_wifi.SetStandard (WIFI_PHY_STANDARD_80211b);
   //Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",
   //                            StringValue ("DsssRate2Mbps"));
- //  m_wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", 
- //                              "DataMode", StringValue ("DsssRate11Mbps"), 
- //                              "ControlMode", StringValue (m_modes));
-  m_wifi.SetRemoteStationManager ("ns3::MinstrelHtWifiManager");
+  m_wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", 
+                              "DataMode", StringValue ("DsssRate11Mbps"), 
+                              "ControlMode", StringValue (m_modes));
+  //m_wifi.SetRemoteStationManager ("ns3::MinstrelHtWifiManager");
                                 
                                 
   m_wifiPhy =  YansWifiPhyHelper::Default ();
@@ -304,7 +263,7 @@ Experiment::InstallApplication(size_t in_packetSize, size_t in_dataRate)
         i<m_apNumber+m_nodeNumber/m_apNumber*j ; ++i){
       std::string s;
       std::stringstream ss(s);
-      std::cout << m_downlinkUplink << "-----------------------";  
+      //std::cout << m_downlinkUplink << "-----------------------";  
       if(m_downlinkUplink){
 
          ss << i+1;
@@ -459,14 +418,14 @@ int main (int argc, char **argv)
   modes.push_back ("DsssRate2Mbps");
   modes.push_back ("DsssRate5_5Mbps");
   modes.push_back ("DsssRate11Mbps");
-  std::cout << "Hidden station experiment with RTS/CTS disabled:\n" << std::flush;
+  std::cout << "Hidden station experiment with RTS/CTS enabled:\n" << std::flush;
   for(size_t i=1; i<2; ++i){
     for(size_t j=0; j<1; ++j){
       for(size_t k=2; k<3; ++k){
         std::cout << "Range=" << range[j] << ", Mode=" << modes[k] << "\n";
         Experiment exp(Downlink, modes[k]);
         exp.SetRtsCts(true);
-        exp.CreateNode(numOfAp[i], 4, range[j]);
+        exp.CreateNode(numOfAp[i], 2, range[j]); // case 1 & 2 = 2 ------case 2 & 3 = 4
         exp.InitialExperiment();
         exp.InstallApplication(1024, 5500000);
         exp.Run(simulationTime);  
