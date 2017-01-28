@@ -7,6 +7,8 @@
 #include "ns3/flow-monitor-module.h"
 #include "ns3/wifi-module.h"
 #include "ns3/netanim-module.h"
+#include "ns3/spectrum-module.h"
+#include "ns3/config-store-module.h"
 
 #include <cmath>
 #include <iomanip>
@@ -21,7 +23,7 @@ using namespace ns3;
 #define Uplink false
 #define PI 3.14159265
 #define PI_e5 314158
-#define simulationTime 50
+#define simulationTime 10
 
 void CalculateThroughput();
 ApplicationContainer sinkApps;
@@ -62,13 +64,11 @@ private:
   std::vector<std::vector<double> > m_readChannelGain;
   std::vector<int> m_serveBy;
   NodeContainer m_nodes;
-  //NodeContainer sta_nodes;
   MobilityHelper m_mobility;
   Ptr<ListPositionAllocator> m_apPosAlloc;
   Ptr<ListPositionAllocator> m_nodePosAlloc;
-  YansWifiChannelHelper m_wifiChannel;
   WifiHelper m_wifi;
-  YansWifiPhyHelper m_wifiPhy;
+  SpectrumWifiPhyHelper spectrumPhy = SpectrumWifiPhyHelper::Default ();
   NqosWifiMacHelper m_wifiMac;
   NetDeviceContainer m_devices;
   InternetStackHelper m_internet;
@@ -101,13 +101,15 @@ void CalculateThroughput()
   avgRx = sumRx/m_nodeNumber;
 
   /* Log to CSV */ 
-  //std::cout << now.GetSeconds () << "s: \t" << avgRx << " Mbit/s" << std::endl;
+  std::cout << now.GetSeconds () << "s: \t" << avgRx << " Mbit/s" << std::endl;
+  /*
   std::ofstream myfile;
-  myfile.open ("downlink.csv",std::ios_base::app);
+  myfile.open ("AarfWifiManager-case4.csv",std::ios_base::app);
   myfile << std::endl;
   myfile << avgRx << ",";
   //myfile << curRxAp << ",";
   myfile.close();
+  */
   Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
 } 
 
@@ -146,10 +148,10 @@ void Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius
   
   for(size_t i=0; i<m_apNumber; ++i){
 
-    m_apPosAlloc->Add(Vector((160*i), 0, 1)); //A1,A2 - Case 1 
+    //m_apPosAlloc->Add(Vector((160*i), 0, 1)); //A1,A2 - Case 1 
    //m_apPosAlloc->Add(Vector((500*i), 0, 1)); //A1,A2 - Case 2 
    //m_apPosAlloc->Add(Vector((60*i)+90, 0, 1)); //A1,A2 - Case 3 
-   //m_apPosAlloc->Add(Vector((260*i)+90, 0, 1)); //A1,A2 - Case 4 
+   m_apPosAlloc->Add(Vector((260*i)+90, 0, 1)); //A1,A2 - Case 4 
   }
   m_mobility.SetPositionAllocator(m_apPosAlloc);
   for(size_t i=0; i<m_apNumber; ++i){
@@ -158,10 +160,10 @@ void Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius
 
   for(size_t i=0; i<m_nodeNumber; ++i){
 
-  m_nodePosAlloc->Add(Vector(80, 0, 1)); //C1,C2 - Case 1
+  //m_nodePosAlloc->Add(Vector(80, 0, 1)); //C1,C2 - Case 1
   //m_nodePosAlloc->Add(Vector((500*i), 80, 1)); //C1,C2 - Case 2
   //m_nodePosAlloc->Add(Vector(( (20*i*i*i)-(105*i*i)+(195*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 3
-  //m_nodePosAlloc->Add(Vector(( (-46.67*i*i*i)+(195*i*i)-(38.33*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 4
+  m_nodePosAlloc->Add(Vector(( (-46.67*i*i*i)+(195*i*i)-(38.33*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 4
   
   }
   m_mobility.SetPositionAllocator(m_nodePosAlloc);
@@ -173,34 +175,43 @@ void Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius
 void
 Experiment::SetWifiChannel()
 {
-  m_wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-  m_wifiChannel.AddPropagationLoss ("ns3::TwoRayGroundPropagationLossModel",
-                                  "Frequency", DoubleValue(2.400e9));
+  Ptr<SingleModelSpectrumChannel> spectrumChannel
+     = CreateObject<SingleModelSpectrumChannel> ();
+  Ptr<FriisPropagationLossModel> lossModel
+     = CreateObject<FriisPropagationLossModel> ();
+  spectrumChannel->AddPropagationLossModel (lossModel);
+  Ptr<ConstantSpeedPropagationDelayModel> delayModel
+     = CreateObject<ConstantSpeedPropagationDelayModel> ();
+  spectrumChannel->SetPropagationDelayModel (delayModel); 
+  spectrumPhy.SetChannel (spectrumChannel);
+  //spectrumPhy.SetErrorRateModel ("ns3::NistErrorRateModel"); 
 }
 
 void
 Experiment::InstallDevices()
 {
-  m_wifi.SetStandard (WIFI_PHY_STANDARD_80211b);
-  //Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",
-  //                            StringValue ("DsssRate2Mbps"));
+  m_wifi.SetStandard (WIFI_PHY_STANDARD_80211g);  //doesnt work with 80211b 
+  // same as b but higher rate (54mbps) 
+   
+  /*
+  Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",
+                              StringValue ("DsssRate2Mbps"));
   m_wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", 
                               "DataMode", StringValue ("DsssRate11Mbps"), 
-                              "ControlMode", StringValue (m_modes));
-  //m_wifi.SetRemoteStationManager ("ns3::MinstrelHtWifiManager");
+                              "ControlMode", StringValue (m_modes));*/
+  m_wifi.SetRemoteStationManager ("ns3::AarfWifiManager");
                                 
                                 
-  m_wifiPhy =  YansWifiPhyHelper::Default ();
-  m_wifiPhy.SetChannel (m_wifiChannel.Create());
-  m_wifiPhy.Set ("EnergyDetectionThreshold", DoubleValue (-95.0) );
-  m_wifiPhy.Set ("CcaMode1Threshold", DoubleValue (-95.0) );
-  m_wifiPhy.Set ("TxPowerStart", DoubleValue (23.0) );
-  m_wifiPhy.Set ("TxPowerEnd", DoubleValue (23.0) );
-  m_wifiPhy.Set ("ChannelNumber", UintegerValue (1) );
-  m_wifiPhy.Set ("RxGain", DoubleValue (-25.0));    
-  NqosWifiMacHelper m_wifiMac;
+  Config::SetDefault ("ns3::WifiPhy::CcaMode1Threshold", DoubleValue (-62.0));
+  spectrumPhy.Set ("EnergyDetectionThreshold", DoubleValue (-95.0) );
+  spectrumPhy.Set ("Frequency", UintegerValue(2400)); 
+  spectrumPhy.Set ("TxPowerStart", DoubleValue (1));
+  spectrumPhy.Set ("TxPowerEnd", DoubleValue (1));
+  spectrumPhy.Set ("ChannelNumber", UintegerValue (1) );
+  spectrumPhy.Set ("RxGain", DoubleValue (1)); 
+
   m_wifiMac.SetType ("ns3::AdhocWifiMac"); // use ad-hoc MAC
-  m_devices = m_wifi.Install (m_wifiPhy, m_wifiMac, m_nodes); 
+  m_devices = m_wifi.Install (spectrumPhy, m_wifiMac, m_nodes); 
 }
 
 void
@@ -425,7 +436,7 @@ int main (int argc, char **argv)
         std::cout << "Range=" << range[j] << ", Mode=" << modes[k] << "\n";
         Experiment exp(Downlink, modes[k]);
         exp.SetRtsCts(true);
-        exp.CreateNode(numOfAp[i], 2, range[j]); // case 1 & 2 = 2 ------case 2 & 3 = 4
+        exp.CreateNode(numOfAp[i], 4, range[j]); // case 1 & 2 = 2 ------case 2 & 3 = 4
         exp.InitialExperiment();
         exp.InstallApplication(1024, 5500000);
         exp.Run(simulationTime);  
