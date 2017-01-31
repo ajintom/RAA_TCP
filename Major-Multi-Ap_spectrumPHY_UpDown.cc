@@ -23,19 +23,21 @@ using namespace ns3;
 #define Uplink false
 #define PI 3.14159265
 #define PI_e5 314158
-#define simulationTime 10
+#define simulationTime 5
 
 void CalculateThroughput();
 ApplicationContainer sinkApps;
+ApplicationContainer apSinkApps;
 size_t m_apNumber;
 size_t m_nodeNumber;
-Ptr<PacketSink> staSink;
-uint64_t lastTotalRxSta[] = {};
+Ptr<PacketSink> staSink,apSink;
+double lastTotalRxSta[4] = {0} , lastTotalRxAp[2] = {0};
 
 class Experiment
 {
 public:
   Experiment(bool downlinkUplink, std::string in_modes);
+  void SpectrumSignalArrival (std::string context, bool signalType, uint32_t senderNodeId, double rxPower, Time duration);
   void SetRtsCts(bool enableCtsRts);
   void CreateNode(size_t in_ap, size_t in_nodeNumber, double radius);
   void CreateNode(size_t in_ap, size_t in_nodeNumber);
@@ -56,14 +58,19 @@ private:
   
   bool m_enableCtsRts;
   bool m_downlinkUplink;
+  bool pcapTracing = false;
   double m_radius;
   size_t m_rxOkCount;
   size_t m_rxErrorCount;
   size_t m_txOkCount;
+  size_t isNotWifi; 
+  size_t sigPower;
   std::string m_modes;
   std::vector<std::vector<double> > m_readChannelGain;
   std::vector<int> m_serveBy;
   NodeContainer m_nodes;
+  std::string dataRate = "10Kbps"; 
+  std::string tcpVariant = "ns3::TcpNewReno";
   MobilityHelper m_mobility;
   Ptr<ListPositionAllocator> m_apPosAlloc;
   Ptr<ListPositionAllocator> m_nodePosAlloc;
@@ -74,7 +81,9 @@ private:
   InternetStackHelper m_internet;
   Ipv4AddressHelper m_ipv4;
   ApplicationContainer m_cbrApps;
-  ApplicationContainer m_pingApps;
+  ApplicationContainer m_upApps;
+  ApplicationContainer m_pingDownApps;
+  ApplicationContainer m_pingUpApps;
 };
 
 Experiment::Experiment(bool in_downlinkUplink, std::string in_modes):
@@ -83,35 +92,71 @@ Experiment::Experiment(bool in_downlinkUplink, std::string in_modes):
   m_rxOkCount = 0;
   m_rxErrorCount = 0;
   m_txOkCount = 0;
+  isNotWifi = 0;
+  sigPower = 0;
+
 }
 
 void CalculateThroughput()
 {
   Time now = Simulator::Now ();
 
-  /* Calculate throughput for downlink */
-  double sumRx = 0, avgRx = 0; 
-  for (uint32_t i = 0; i < m_nodeNumber; ++i)
+  double sumRx = 0, avgRx = 0, tempSinkSta = 0;
+  double sumAp = 0, avgAp = 0, tempSinkAp = 0;
+  /* Calculate throughput for uplink */
+  
+  for (size_t k = 0; k < m_apNumber; ++k)
     {
-      staSink = StaticCast<PacketSink>(sinkApps.Get(m_apNumber + i));
-      double curRxSta = (staSink->GetTotalRx() - lastTotalRxSta[i]) * (double) 8/1e5; 
-      lastTotalRxSta[i] = staSink->GetTotalRx ();
+      apSink = StaticCast<PacketSink>(apSinkApps.Get(k));
+      tempSinkAp = apSink->GetTotalRx();
+      //std::cout << " lastAp " << lastTotalRxAp[k] << "\n";
+      //std::cout << " sinkAp " << tempSinkAp << "\n";
+      double curRxAp = (tempSinkAp - lastTotalRxAp[k]) * (double) 8/1e5;    
+      lastTotalRxAp[k] = tempSinkAp; 
+      sumAp += curRxAp;  
+      //std::cout << " curRxAp " << curRxAp << "\n";
+      //std::cout << " SumAp " << sumAp << "\n";                 
+    }
+
+  /* Calculate throughput for downlink */
+  for (size_t m = 0; m < m_nodeNumber; ++m)
+    {
+      staSink = StaticCast<PacketSink>(sinkApps.Get(m));
+      tempSinkSta = staSink->GetTotalRx();
+      //std::cout << " lastSta " << lastTotalRxSta[m] << "\n";
+      //std::cout << " sinkSta " << tempSinkSta << "\n";
+      double curRxSta = (tempSinkSta - lastTotalRxSta[m]) * (double) 8/1e5; 
+      lastTotalRxSta[m] = tempSinkSta;
       sumRx += curRxSta;
+      //std::cout << " curRxSta " << curRxSta << "\n";
+      //std::cout << " SumRx " << sumRx << "\n";
     } 
   avgRx = sumRx/m_nodeNumber;
+  avgAp = sumAp/m_nodeNumber;
 
   /* Log to CSV */ 
-  std::cout << now.GetSeconds () << "s: \t" << avgRx << " Mbit/s" << std::endl;
-  /*
-  std::ofstream myfile;
+  std::cout << now.GetSeconds () << "s: \t" << avgRx << "   " << avgAp << " Mbit/s" << std::endl;
+  /*std::ofstream myfile;
   myfile.open ("AarfWifiManager-case4.csv",std::ios_base::app);
   myfile << std::endl;
   myfile << avgRx << ",";
-  //myfile << curRxAp << ",";
-  myfile.close();
-  */
+  myfile << avgAp << ",";
+  myfile.close();*/
   Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
 } 
+
+void
+Experiment::SpectrumSignalArrival (std::string context, bool signalType,
+uint32_t senderNodeId, double rxPower, Time duration)
+{
+  if(signalType == false){
+    isNotWifi++;
+  }
+
+  if(rxPower < -62){
+    sigPower++;
+  }
+}
 
 void
 Experiment::InitialExperiment()
@@ -177,8 +222,8 @@ Experiment::SetWifiChannel()
 {
   Ptr<SingleModelSpectrumChannel> spectrumChannel
      = CreateObject<SingleModelSpectrumChannel> ();
-  Ptr<FriisPropagationLossModel> lossModel
-     = CreateObject<FriisPropagationLossModel> ();
+  Ptr<TwoRayGroundPropagationLossModel> lossModel
+     = CreateObject<TwoRayGroundPropagationLossModel> ();
   spectrumChannel->AddPropagationLossModel (lossModel);
   Ptr<ConstantSpeedPropagationDelayModel> delayModel
      = CreateObject<ConstantSpeedPropagationDelayModel> ();
@@ -192,23 +237,24 @@ Experiment::InstallDevices()
 {
   m_wifi.SetStandard (WIFI_PHY_STANDARD_80211g);  //doesnt work with 80211b 
   // same as b but higher rate (54mbps) 
-   
+
   /*
   Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",
-                              StringValue ("DsssRate2Mbps"));
-  m_wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", 
-                              "DataMode", StringValue ("DsssRate11Mbps"), 
+                              StringValue ("DsssRate2Mbps"));*/
+  
+  /*m_wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", 
+                              "DataMode", StringValue (m_modes), 
                               "ControlMode", StringValue (m_modes));*/
   m_wifi.SetRemoteStationManager ("ns3::AarfWifiManager");
                                 
                                 
-  Config::SetDefault ("ns3::WifiPhy::CcaMode1Threshold", DoubleValue (-62.0));
+  Config::SetDefault ("ns3::WifiPhy::CcaMode1Threshold", DoubleValue (-95.0));
   spectrumPhy.Set ("EnergyDetectionThreshold", DoubleValue (-95.0) );
   spectrumPhy.Set ("Frequency", UintegerValue(2400)); 
-  spectrumPhy.Set ("TxPowerStart", DoubleValue (1));
-  spectrumPhy.Set ("TxPowerEnd", DoubleValue (1));
+  spectrumPhy.Set ("TxPowerStart", DoubleValue (23.0));
+  spectrumPhy.Set ("TxPowerEnd", DoubleValue (23.0));
   spectrumPhy.Set ("ChannelNumber", UintegerValue (1) );
-  spectrumPhy.Set ("RxGain", DoubleValue (1)); 
+  spectrumPhy.Set ("RxGain", DoubleValue (-25)); 
 
   m_wifiMac.SetType ("ns3::AdhocWifiMac"); // use ad-hoc MAC
   m_devices = m_wifi.Install (spectrumPhy, m_wifiMac, m_nodes); 
@@ -266,85 +312,102 @@ Experiment::PhyTxTrace (std::string context, Ptr<const Packet> packet,
 void
 Experiment::InstallApplication(size_t in_packetSize, size_t in_dataRate)
 {
-  uint16_t cbrPort = 12345;
-  uint16_t  echoPort = 9;
-  //uint16_t sinkPort = 5555;
+  uint16_t downPort = 12345;
+  uint16_t upPort = 5555;
+  uint16_t  echoDownPort = 9;
+  uint16_t  echoUpPort = 8080;
+
   for(size_t j=1; j<=m_apNumber; ++j){
-    for(size_t i=m_apNumber+m_nodeNumber/m_apNumber*(j-1); 
-        i<m_apNumber+m_nodeNumber/m_apNumber*j ; ++i){
-      std::string s;
-      std::stringstream ss(s);
-      //std::cout << m_downlinkUplink << "-----------------------";  
-      if(m_downlinkUplink){
-
-         ss << i+1;
-      }else
-      {
-        ss << j;
-      }
-      s = "10.0.0."+ss.str();
-      OnOffHelper onOffHelper ("ns3::TcpSocketFactory", 
-               InetSocketAddress (Ipv4Address (s.c_str()), cbrPort));
-      onOffHelper.SetAttribute ("PacketSize", UintegerValue (in_packetSize));
-//onOffHelper.SetAttribute ("OnTime",  StringValue ("ns3::ConstantRandomVariable[Constant=1]"));
-//onOffHelper.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
+    for(size_t i=m_apNumber+(m_nodeNumber/m_apNumber)*(j-1); 
+        i<m_apNumber+(m_nodeNumber/m_apNumber)*j ; ++i){
+      std::string s1;
       std::string s2;
+      std::stringstream ss1(s1);
       std::stringstream ss2(s2);
-
-      PacketSinkHelper sink ("ns3::TcpSocketFactory",
-                        InetSocketAddress (Ipv4Address(s.c_str()),  cbrPort));
-      sinkApps = sink.Install (m_nodes);
-      sinkApps.Start (Seconds (0.00));
-      sinkApps.Stop (Seconds (simulationTime));
-
       if(m_downlinkUplink){
-        ss2 << in_dataRate+i*100;
-      }else
-      {
-        ss2 << in_dataRate+i*100;
+
+         ss1 << i+1;
+         ss2 << j;
       }
-      s2 = ss2.str() + "bps";
-      onOffHelper.SetAttribute ("DataRate", StringValue (s2));
-      //onOffHelper.SetAttribute ("MaxBytes", UintegerValue (100000));
+
+      s1 = "10.0.0."+ss1.str();
+      s2 = "10.0.0."+ss2.str();
+      BulkSendHelper bulk ("ns3::TcpSocketFactory", 
+             InetSocketAddress (Ipv4Address (s1.c_str()), downPort));
+      
+      
+      /* Installing Sink applications */   
+      PacketSinkHelper sink ("ns3::TcpSocketFactory",
+                        InetSocketAddress (Ipv4Address(s1.c_str()), downPort));
+      sinkApps.Add(sink.Install(m_nodes.Get(i)));
+      PacketSinkHelper apsink ("ns3::TcpSocketFactory",
+                        InetSocketAddress (Ipv4Address(s2.c_str()), upPort));
+      apSinkApps.Add(apsink.Install (m_nodes.Get(j-1)));
+           
+
+      std::string s3;
+      std::stringstream ss3(s3);
       if(m_downlinkUplink){
-        onOffHelper.SetAttribute ("StartTime", TimeValue (Seconds (1.00+static_cast<double>(i)/100)));
-        onOffHelper.SetAttribute ("StopTime", TimeValue (Seconds (50.000+static_cast<double>(i)/100)));
-        m_cbrApps.Add (onOffHelper.Install (m_nodes.Get (j-1)));
-      }else
-      {
-        onOffHelper.SetAttribute ("StartTime", TimeValue (Seconds (1.00)));
-        onOffHelper.SetAttribute ("StopTime", TimeValue (Seconds (50.000+static_cast<double>(j)/100)));
-        m_cbrApps.Add (onOffHelper.Install (m_nodes.Get (i))); 
+        ss3 << in_dataRate;
+      }
+
+      s3 = ss3.str() + "bps";
+
+      if(m_downlinkUplink){
+        bulk.SetAttribute ("MaxBytes", UintegerValue (0));
+        bulk.SetAttribute ("StartTime", TimeValue (Seconds (1.00+static_cast<double>(i)/100)));
+        bulk.SetAttribute ("StopTime", TimeValue (Seconds (simulationTime +static_cast<double>(i)/100)));
+        m_cbrApps.Add (bulk.Install (m_nodes.Get (j-1)));
+
+        OnOffHelper server ("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address(s2.c_str()), upPort));
+        server.SetAttribute ("PacketSize", UintegerValue (in_packetSize));
+        server.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=5]"));
+        server.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
+        server.SetAttribute ("DataRate", DataRateValue (DataRate (dataRate)));
+        m_upApps.Add (server.Install (m_nodes.Get (i))); 
       }
     }
   }  
+
+  sinkApps.Start (Seconds (0.00));
+  sinkApps.Stop (Seconds (simulationTime));
+
+  apSinkApps.Start (Seconds (0.00));
+  apSinkApps.Stop (Seconds (simulationTime));
      
   //again using different start times to workaround Bug 388 and Bug 912
   for(size_t j=1; j<=m_apNumber; ++j){
-    for(size_t i=m_apNumber+m_nodeNumber/m_apNumber*(j-1); 
-        i<m_apNumber+m_nodeNumber/m_apNumber*j ; ++i){
-      std::string s;
-      std::stringstream ss(s);
+    for(size_t i=m_apNumber+(m_nodeNumber/m_apNumber)*(j-1); 
+        i<m_apNumber+(m_nodeNumber/m_apNumber)*j ; ++i){
+      std::string s1;
+      std::string s2;
+      std::stringstream ss1(s1);
+      std::stringstream ss2(s2);
       if(m_downlinkUplink){
-         ss << i+1;
-      }else
-      {
-        ss << j;
+         ss1 << i+1;
+         ss2 << j;
       }
-      s = "10.0.0."+ss.str();
-      UdpEchoClientHelper echoClientHelper (Ipv4Address (s.c_str()), echoPort);
-      echoClientHelper.SetAttribute ("MaxPackets", UintegerValue (1));
-      echoClientHelper.SetAttribute ("Interval", TimeValue (Seconds (0.1)));
-      echoClientHelper.SetAttribute ("PacketSize", UintegerValue (10));
+
+      s1 = "10.0.0."+ss1.str();
+      s2 = "10.0.0."+ss2.str();
+      UdpEchoClientHelper echoDownHelper (Ipv4Address (s1.c_str()), echoDownPort);
+      echoDownHelper.SetAttribute ("MaxPackets", UintegerValue (1));
+      echoDownHelper.SetAttribute ("Interval", TimeValue (Seconds (0.1)));
+      echoDownHelper.SetAttribute ("PacketSize", UintegerValue (10));
       if(m_downlinkUplink){
-        echoClientHelper.SetAttribute ("StartTime", TimeValue (Seconds (0.001)));
-        echoClientHelper.SetAttribute ("StopTime", TimeValue (Seconds (50.001)));
-        m_pingApps.Add (echoClientHelper.Install (m_nodes.Get (j-1))); 
-      }else
-      {
-        echoClientHelper.SetAttribute ("StartTime", TimeValue (Seconds (0.001)));
-        echoClientHelper.SetAttribute ("StopTime", TimeValue (Seconds (50.001)));
-        m_pingApps.Add (echoClientHelper.Install (m_nodes.Get (i))); 
+        echoDownHelper.SetAttribute ("StartTime", TimeValue (Seconds (0.001)));
+        echoDownHelper.SetAttribute ("StopTime", TimeValue (Seconds (50.001)));
+        m_pingDownApps.Add (echoDownHelper.Install (m_nodes.Get (j-1))); 
+ 
+        
+        UdpEchoClientHelper echoUpHelper (Ipv4Address (s2.c_str()), echoUpPort);
+        echoUpHelper.SetAttribute ("MaxPackets", UintegerValue (1));
+        echoUpHelper.SetAttribute ("Interval", TimeValue (Seconds (0.1)));
+        echoUpHelper.SetAttribute ("PacketSize", UintegerValue (10));
+        echoUpHelper.SetAttribute ("StartTime", TimeValue (Seconds (0.001)));
+        echoUpHelper.SetAttribute ("StopTime", TimeValue (Seconds (50.001)));
+        m_pingUpApps.Add (echoUpHelper.Install (m_nodes.Get (i))); 
+        
       }
     }
   }
@@ -372,6 +435,11 @@ Experiment::ShowNodeInformation(NodeContainer in_c, size_t in_numOfNode)
 void 
 Experiment::Run(size_t in_simTime)
 { 
+  if (pcapTracing)
+    {  
+      spectrumPhy.SetPcapDataLinkType (SpectrumWifiPhyHelper::DLT_IEEE802_11_RADIO);
+      spectrumPhy.EnablePcap ("AarfWifiManager", m_devices);
+    } 
   // 8. Install FlowMonitor on all nodes
   Simulator::Schedule (Seconds (1.1), &CalculateThroughput);
 
@@ -388,7 +456,10 @@ Experiment::Run(size_t in_simTime)
              MakeCallback (&Experiment::PhyRxOkTrace, this));
   Config::Connect ("/NodeList/*/DeviceList/*/Phy/State/Tx", 
              MakeCallback (&Experiment::PhyTxTrace, this));
-  AnimationInterface anim ("multiAp.xml");
+  Config::Connect ("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/$ns3::WifiPhy/SignalArrival",
+             MakeCallback (&Experiment::SpectrumSignalArrival, this));
+
+  AnimationInterface anim ("AarfWifiManager.xml");
   Simulator::Run ();
 
   // 10. Print per flow statistics
@@ -408,12 +479,25 @@ Experiment::Run(size_t in_simTime)
     std::cout << "  Lost Packets: " << i->second.lostPackets << "\n";
     std::cout << "  Pkt Lost Ratio: " << ((double)i->second.txPackets-(double)i->second.rxPackets)/(double)i->second.txPackets << "\n";
     std::cout << "  Throughput: " << i->second.rxBytes * 8.0 / in_simTime / 1024 / 1024  << " Mbps\n";
-    accumulatedThroughput+=(i->second.rxBytes*8.0/in_simTime/1024/1024);
+
+    /*Calculate throughput only for downlink*/
+    for(size_t j=1; j<=m_apNumber; ++j){
+      std::string ip;
+      std::stringstream ssip(ip);
+      ssip << j;
+      ip = "10.0.0."+ssip.str();
+      //std::cout << "\n" << "ip1 " << ip.c_str() << " ";
+      if(t.sourceAddress == ip.c_str()) 
+      {
+       //std::cout << "ip2 " << ip.c_str() << " " ;
+       accumulatedThroughput+=(i->second.rxBytes*8.0/in_simTime/1024/1024);
+      }
+      }
   }  
   std::cout << "apNumber=" <<m_apNumber << " nodeNumber=" << m_nodeNumber << "\n" << std::flush;
   std::cout << "throughput=" << accumulatedThroughput << "\n" << std::flush;
   std::cout << "tx=" << m_txOkCount << " RXerror=" <<m_rxErrorCount << 
-               " Rxok=" << m_rxOkCount << "\n" << std::flush;
+               " Rxok=" << m_rxOkCount << " isNotWifi=" << isNotWifi << " sigPower="<< sigPower << "\n" << std::flush;
   std::cout << "===========================\n" << std::flush;
   // 11. Cleanup
   Simulator::Destroy ();
