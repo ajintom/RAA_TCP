@@ -23,7 +23,7 @@ using namespace ns3;
 #define Uplink false
 #define PI 3.14159265
 #define PI_e5 314158
-#define simulationTime 5
+#define simulationTime 50
 
 void CalculateThroughput();
 ApplicationContainer sinkApps;
@@ -31,7 +31,7 @@ ApplicationContainer apSinkApps;
 size_t m_apNumber;
 size_t m_nodeNumber;
 Ptr<PacketSink> staSink,apSink;
-double lastTotalRxSta[4] = {0} , lastTotalRxAp[2] = {0};
+double lastTotalRxSta[2] = {0} , lastTotalRxAp[2] = {0};
 
 class Experiment
 {
@@ -58,7 +58,7 @@ private:
   
   bool m_enableCtsRts;
   bool m_downlinkUplink;
-  bool pcapTracing = false;
+  bool pcapTracing = true;
   double m_radius;
   size_t m_rxOkCount;
   size_t m_rxErrorCount;
@@ -135,13 +135,13 @@ void CalculateThroughput()
   avgAp = sumAp/m_nodeNumber;
 
   /* Log to CSV */ 
-  std::cout << now.GetSeconds () << "s: \t" << avgRx << "   " << avgAp << " Mbit/s" << std::endl;
-  /*std::ofstream myfile;
-  myfile.open ("AarfWifiManager-case4.csv",std::ios_base::app);
+  //std::cout << now.GetSeconds () << "s: \t" << avgRx << "   " << avgAp << " Mbit/s" << std::endl;
+  std::ofstream myfile;
+  myfile.open ("ConstantRateWifiManager-11-case1.csv",std::ios_base::app);
   myfile << std::endl;
   myfile << avgRx << ",";
   myfile << avgAp << ",";
-  myfile.close();*/
+  myfile.close();
   Simulator::Schedule (MilliSeconds (100), &CalculateThroughput);
 } 
 
@@ -193,10 +193,10 @@ void Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius
   
   for(size_t i=0; i<m_apNumber; ++i){
 
-    //m_apPosAlloc->Add(Vector((160*i), 0, 1)); //A1,A2 - Case 1 
+   m_apPosAlloc->Add(Vector((160*i), 0, 1)); //A1,A2 - Case 1 
    //m_apPosAlloc->Add(Vector((500*i), 0, 1)); //A1,A2 - Case 2 
    //m_apPosAlloc->Add(Vector((60*i)+90, 0, 1)); //A1,A2 - Case 3 
-   m_apPosAlloc->Add(Vector((260*i)+90, 0, 1)); //A1,A2 - Case 4 
+   //m_apPosAlloc->Add(Vector((260*i)+90, 0, 1)); //A1,A2 - Case 4 
   }
   m_mobility.SetPositionAllocator(m_apPosAlloc);
   for(size_t i=0; i<m_apNumber; ++i){
@@ -205,10 +205,10 @@ void Experiment::CreateNode(size_t in_ap, size_t in_nodeNumber, double in_radius
 
   for(size_t i=0; i<m_nodeNumber; ++i){
 
-  //m_nodePosAlloc->Add(Vector(80, 0, 1)); //C1,C2 - Case 1
+  m_nodePosAlloc->Add(Vector(80, 0, 1)); //C1,C2 - Case 1
   //m_nodePosAlloc->Add(Vector((500*i), 80, 1)); //C1,C2 - Case 2
   //m_nodePosAlloc->Add(Vector(( (20*i*i*i)-(105*i*i)+(195*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 3
-  m_nodePosAlloc->Add(Vector(( (-46.67*i*i*i)+(195*i*i)-(38.33*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 4
+  //m_nodePosAlloc->Add(Vector(( (-46.67*i*i*i)+(195*i*i)-(38.33*i)  ), 0, 1)); //C1,C2,C3,C4 - Case 4
   
   }
   m_mobility.SetPositionAllocator(m_nodePosAlloc);
@@ -242,10 +242,10 @@ Experiment::InstallDevices()
   Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",
                               StringValue ("DsssRate2Mbps"));*/
   
-  /*m_wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", 
-                              "DataMode", StringValue (m_modes), 
-                              "ControlMode", StringValue (m_modes));*/
-  m_wifi.SetRemoteStationManager ("ns3::AarfWifiManager");
+  m_wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", 
+                              "DataMode", StringValue ("DsssRate11Mbps"), 
+                              "ControlMode", StringValue (m_modes));
+  //m_wifi.SetRemoteStationManager ("ns3::MinstrelHtWifiManager");
                                 
                                 
   Config::SetDefault ("ns3::WifiPhy::CcaMode1Threshold", DoubleValue (-95.0));
@@ -438,7 +438,7 @@ Experiment::Run(size_t in_simTime)
   if (pcapTracing)
     {  
       spectrumPhy.SetPcapDataLinkType (SpectrumWifiPhyHelper::DLT_IEEE802_11_RADIO);
-      spectrumPhy.EnablePcap ("AarfWifiManager", m_devices);
+      spectrumPhy.EnablePcap ("ConstantRateWifiManager-11-case1", m_devices);
     } 
   // 8. Install FlowMonitor on all nodes
   Simulator::Schedule (Seconds (1.1), &CalculateThroughput);
@@ -459,7 +459,7 @@ Experiment::Run(size_t in_simTime)
   Config::Connect ("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/$ns3::WifiPhy/SignalArrival",
              MakeCallback (&Experiment::SpectrumSignalArrival, this));
 
-  AnimationInterface anim ("AarfWifiManager.xml");
+  AnimationInterface anim ("ConstantRateWifiManager-11-case1.xml");
   Simulator::Run ();
 
   // 10. Print per flow statistics
@@ -520,9 +520,9 @@ int main (int argc, char **argv)
         std::cout << "Range=" << range[j] << ", Mode=" << modes[k] << "\n";
         Experiment exp(Downlink, modes[k]);
         exp.SetRtsCts(true);
-        exp.CreateNode(numOfAp[i], 4, range[j]); // case 1 & 2 = 2 ------case 2 & 3 = 4
+        exp.CreateNode(numOfAp[i], 2, range[j]); // case 1 & 2 = 2 ------case 2 & 3 = 4
         exp.InitialExperiment();
-        exp.InstallApplication(1024, 5500000);
+        exp.InstallApplication(1024, 11000000);
         exp.Run(simulationTime);  
       }
     }
