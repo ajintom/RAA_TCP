@@ -111,7 +111,7 @@ void CalculateThroughput()
       tempSinkAp = apSink->GetTotalRx();
       //std::cout << " lastAp " << lastTotalRxAp[k] << "\n";
       //std::cout << " sinkAp " << tempSinkAp << "\n";
-      double curRxAp = (tempSinkAp - lastTotalRxAp[k]) * (double) 8/1e5;    
+      double curRxAp = (tempSinkAp - lastTotalRxAp[k]) * (double) 8/1e2;    
       lastTotalRxAp[k] = tempSinkAp; 
       sumAp += curRxAp;  
       //std::cout << " curRxAp " << curRxAp << "\n";
@@ -242,10 +242,10 @@ Experiment::InstallDevices()
   Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",
                               StringValue ("DsssRate2Mbps"));*/
   
-  m_wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", 
+  /*m_wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", 
                               "DataMode", StringValue ("DsssRate11Mbps"), 
-                              "ControlMode", StringValue (m_modes));
-  //m_wifi.SetRemoteStationManager ("ns3::MinstrelHtWifiManager");
+                              "ControlMode", StringValue (m_modes));*/
+  m_wifi.SetRemoteStationManager ("ns3::MinstrelHtWifiManager");
                                 
                                 
   Config::SetDefault ("ns3::WifiPhy::CcaMode1Threshold", DoubleValue (-95.0));
